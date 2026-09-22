@@ -10,7 +10,7 @@ import type { AppStatus, Engine } from "./SidecarApp";
 import { applyActions, boardHeight, describeBoard, emptyBoard, BOARD_MIN_H, type BoardState, type Measure } from "@/lib/board";
 import { getDemo } from "@/lib/demo";
 import { demoReply, demoStart, type DemoState } from "@/lib/demo-engine";
-import { createRecognizer, prefetchVoice, speakAsync, speechRecognitionSupported, stopSpeaking, ttsSupported } from "@/lib/speech";
+import { createRecognizer, isEcho, prefetchVoice, speakAsync, speechRecognitionSupported, stopSpeaking, ttsSupported } from "@/lib/speech";
 import { BeatBuilder, beatsFromTurn, type Beat } from "@/lib/narration";
 import { BoardStreamParser, STREAM_ERROR } from "@/lib/stream-parse";
 import { normalizeTurn } from "@/lib/sanitize";
@@ -105,6 +105,14 @@ export default function Session({
   const prefsRef = useRef(prefs);
   prefsRef.current = prefs;
   const playToken = useRef(0);
+  const [handsFree, setHandsFree] = useState(false);
+  const handsFreeRef = useRef(false);
+  const pendingVoice = useRef<string | null>(null);
+  const speakingRef = useRef(false);
+  const busyRef = useRef(false);
+  const thinkingRef = useRef(false);
+  const currentLineRef = useRef("");
+  const sendRef = useRef<(t: string) => void>(() => {});
   const statusRef = useRef(status);
   /** The beat player for the turn currently being taught (see playTurn). */
   const player = useRef<{ push(a: BoardAction): void; end(turn: TutorTurn): void; flush(): void } | null>(null);
@@ -401,13 +409,22 @@ export default function Session({
     [thinking, streaming, askTutor, engine, interrupt, inkCount],
   );
 
+  sendRef.current = (t: string) => void send(t);
+  speakingRef.current = speaking;
+  busyRef.current = boardBusy;
+  thinkingRef.current = thinking || streaming;
+  currentLineRef.current = activeBeat >= 0 ? beatLines[activeBeat] ?? "" : beatLines.join(" ");
+
   useEffect(() => {
     if (lastTutor && lastTutor.verdict !== "none" && (lastTutor.phase === "wrapup" || lastTutor.phase === "practice") && practice) {
       if (lastTutor.phase === "wrapup") setPracticeResult(lastTutor.verdict === "correct" ? "Solved the practice problem ✓" : "Practiced with a hint");
     }
   }, [lastTutor, practice]);
 
+  // ---------------------------------------------------------------- voice input
+  /** One-shot: tap the mic, say one thing, it sends. */
   const toggleMic = () => {
+    if (handsFreeRef.current) return setHandsFree(false);
     if (listening) {
       recognizer.current?.stop();
       return;
@@ -424,7 +441,7 @@ export default function Session({
       },
       onEnd: () => {
         setListening(false);
-        if (latest.trim()) send(latest);
+        if (latest.trim()) sendRef.current(latest);
       },
       onError: (msg) => {
         setListening(false);
@@ -440,6 +457,76 @@ export default function Session({
       setListening(false);
     }
   };
+
+  // Hands-free: the mic stays on. Start talking to interrupt; each finished sentence is sent.
+  useEffect(() => {
+    handsFreeRef.current = handsFree;
+    if (!handsFree) {
+      recognizer.current?.abort();
+      setListening(false);
+      return;
+    }
+    let stopped = false;
+    const start = () => {
+      if (stopped || !handsFreeRef.current) return;
+      const rec = createRecognizer(
+        {
+          onText: (t, final) => {
+            const text = t.trim();
+            if (!text) return;
+            const teacherTalking = speakingRef.current || busyRef.current;
+            // Ignore Teacher's own voice leaking from the speakers into the mic.
+            if (teacherTalking && isEcho(text, currentLineRef.current)) return;
+            if (!final) {
+              if (teacherTalking && text.split(/\s+/).length >= 2) interrupt();
+              setInput(text);
+              return;
+            }
+            setInput("");
+            if (thinkingRef.current) pendingVoice.current = text; // sent as soon as Teacher is ready
+            else sendRef.current(text);
+          },
+          onEnd: () => {
+            // Browsers stop listening after a pause; quietly start again.
+            if (!stopped && handsFreeRef.current) setTimeout(start, 250);
+          },
+          onError: (msg, code) => {
+            if (code === "not-allowed" || code === "service-not-allowed" || code === "audio-capture") {
+              setNotice(msg);
+              setHandsFree(false);
+            }
+          },
+        },
+        { continuous: true },
+      );
+      if (!rec) {
+        setHandsFree(false);
+        return;
+      }
+      recognizer.current = rec;
+      try {
+        rec.start();
+        setListening(true);
+      } catch {
+        /* already started */
+      }
+    };
+    start();
+    return () => {
+      stopped = true;
+      recognizer.current?.abort();
+      setListening(false);
+    };
+  }, [handsFree, interrupt]);
+
+  // Something said hands-free while Teacher was busy: send it once Teacher is ready.
+  useEffect(() => {
+    if (!thinking && !streaming && pendingVoice.current) {
+      const t = pendingVoice.current;
+      pendingVoice.current = null;
+      sendRef.current(t);
+    }
+  }, [thinking, streaming]);
 
   // Esc stops the voice / drawing.
   useEffect(() => {
@@ -763,9 +850,20 @@ export default function Session({
                   onClick={toggleMic}
                   aria-label={listening ? "Stop listening" : "Talk to Teacher"}
                   title={listening ? "Stop listening" : "Talk to Teacher"}
-                  disabled={thinking}
+                  disabled={thinking && !handsFree}
                 >
                   🎙️
+                </button>
+              )}
+              {micOk && (
+                <button
+                  type="button"
+                  className={`icon-btn icon-btn--wide ${handsFree ? "icon-btn--live" : ""}`}
+                  onClick={() => setHandsFree((v) => !v)}
+                  aria-pressed={handsFree}
+                  title="Hands-free: keep the mic on. Just start talking to interrupt Teacher."
+                >
+                  {handsFree ? "🟢 Hands-free on" : "Hands-free"}
                 </button>
               )}
               <button type="submit" className="btn btn--primary" disabled={!input.trim() || thinking || streaming}>

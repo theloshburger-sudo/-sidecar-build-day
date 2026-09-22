@@ -23,6 +23,7 @@ Upload a Canvas assignment or study guide (PDF or a phone photo), tap the one pr
 | **Voice, synced to the board** | Teacher talks with a natural ElevenLabs voice, or the best browser voice as a fallback. Drawing starts when the voice starts and is paced to finish with it. Speech recognition lets you talk back. Voice is optional: every control also works with text. |
 | **Talk and draw in step** | Teacher teaches in short beats: one spoken line, then exactly the strokes it describes. The caption highlights the line being spoken. |
 | **Fast replies** | Claude's reply streams in, so Teacher starts the first beat while the rest is still being written. The system prompt is cached. |
+| **Hands-free voice** | Tap **Hands-free** and the mic stays on. Start talking to interrupt Teacher mid-sentence; each finished sentence is sent automatically. Teacher's own voice is filtered out, but headphones work best. |
 | **Speed controls** | Drawing: Auto (matches the voice) / 0.25× / 0.5× / 1× / 1.5× / 2×. Voice: 0.75× / 1× / 1.25× / 1.5×. |
 | **Draw on the board yourself** | ✍️ **Draw** lets you write on the whiteboard with a mouse, finger or stylus. Your green ink is sent to Claude as an image with your next message, so Teacher can respond to what you drew. |
 | **Videos, only when useful** | 1–2 targeted YouTube suggestions, shown as real video cards if a YouTube key is set and as search links otherwise. |

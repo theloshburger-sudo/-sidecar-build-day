@@ -7,7 +7,7 @@ type SR = {
   start(): void;
   stop(): void;
   abort(): void;
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null;
+  onresult: ((e: { resultIndex: number; results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null;
   onend: (() => void) | null;
   onerror: ((e: { error: string }) => void) | null;
 };
@@ -22,19 +22,33 @@ export function ttsSupported(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
-export function createRecognizer(handlers: {
-  onText: (text: string, final: boolean) => void;
-  onEnd: () => void;
-  onError: (msg: string) => void;
-}): SR | null {
+export function createRecognizer(
+  handlers: {
+    onText: (text: string, final: boolean) => void;
+    onEnd: () => void;
+    onError: (msg: string, code: string) => void;
+  },
+  opts: { continuous?: boolean } = {},
+): SR | null {
   if (!speechRecognitionSupported()) return null;
   const w = window as unknown as { SpeechRecognition?: new () => SR; webkitSpeechRecognition?: new () => SR };
   const Ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition!;
   const rec = new Ctor();
   rec.lang = "en-US";
   rec.interimResults = true;
-  rec.continuous = false;
+  rec.continuous = Boolean(opts.continuous);
   rec.onresult = (e) => {
+    if (opts.continuous) {
+      // Hands-free: report each finished phrase once, plus the phrase in progress.
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) handlers.onText(r[0].transcript, true);
+        else interim += r[0].transcript;
+      }
+      if (interim) handlers.onText(interim, false);
+      return;
+    }
     let text = "";
     let final = false;
     for (let i = 0; i < e.results.length; i++) {
@@ -48,12 +62,29 @@ export function createRecognizer(handlers: {
     const msg =
       e.error === "not-allowed" || e.error === "service-not-allowed"
         ? "Microphone access was blocked. Allow it in your browser's address bar, or just type."
-        : e.error === "no-speech"
+        : e.error === "audio-capture"
+          ? "No microphone was found. Plug one in or check your sound settings, or just type."
+          : e.error === "no-speech"
           ? "I didn't catch that. Try again, or type your question."
           : "Voice input stopped. You can always type instead.";
-    handlers.onError(msg);
+    handlers.onError(msg, e.error);
   };
   return rec;
+}
+
+const words = (t: string) => t.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
+
+/**
+ * True when what the mic heard is probably Teacher's own voice coming out of the speakers
+ * (most of its words appear in what Teacher is currently saying).
+ */
+export function isEcho(heard: string, speaking: string): boolean {
+  const h = words(heard);
+  if (!h.length) return true;
+  const said = new Set(words(speaking));
+  if (!said.size) return false;
+  const overlap = h.filter((w) => said.has(w)).length / h.length;
+  return overlap >= 0.6;
 }
 
 let preferred: SpeechSynthesisVoice | null = null;
