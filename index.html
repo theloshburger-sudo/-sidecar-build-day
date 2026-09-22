@@ -1,0 +1,1278 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Sidecar attaches a focused, adaptive tutor to the homework problem you are solving."
+    />
+    <meta name="theme-color" content="#10251f" />
+    <title>Sidecar — a tutor for this exact problem</title>
+    <style>
+:root {
+  --ink: #13231e;
+  --muted: #60716a;
+  --soft: #eff4f1;
+  --line: #dbe5df;
+  --paper: #fbfdfb;
+  --green: #1f6b52;
+  --green-dark: #114535;
+  --mint: #bdebd8;
+  --mint-soft: #e7f8f1;
+  --coral: #f1785b;
+  --violet: #6956bd;
+  --yellow: #f4c95d;
+  --shadow: 0 18px 55px rgba(20, 54, 43, 0.1);
+}
+
+* { box-sizing: border-box; }
+
+html { min-width: 320px; background: #edf3ef; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 8% 4%, rgba(189, 235, 216, 0.55), transparent 25rem),
+    linear-gradient(180deg, #f8fbf9 0%, #edf3ef 100%);
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, textarea, input, select { font: inherit; }
+button, label, select { -webkit-tap-highlight-color: transparent; }
+button { color: inherit; }
+
+.topbar {
+  min-height: 78px;
+  padding: 15px clamp(18px, 4vw, 56px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(171, 193, 182, 0.45);
+  background: rgba(251, 253, 251, 0.82);
+  backdrop-filter: blur(18px);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.brand-mark {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px 14px 14px 5px;
+  background: var(--ink);
+  color: var(--mint);
+  font-family: Georgia, serif;
+  font-size: 25px;
+  font-style: italic;
+}
+
+.brand strong, .brand small { display: block; }
+.brand strong { font-size: 18px; letter-spacing: -0.02em; }
+.brand small { margin-top: 2px; color: var(--muted); font-size: 11px; }
+
+.top-actions { display: flex; align-items: center; gap: 10px; }
+
+.privacy-pill {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: white;
+  color: var(--muted);
+  font-size: 12px;
+}
+.privacy-pill span { color: #39a974; font-size: 9px; margin-right: 5px; }
+
+.icon-button, .dialog-close {
+  border: 1px solid var(--line);
+  background: white;
+  cursor: pointer;
+}
+.icon-button { width: 38px; height: 38px; border-radius: 12px; }
+.icon-button:hover { background: var(--soft); }
+
+.workspace {
+  width: min(1440px, calc(100% - 32px));
+  min-height: calc(100vh - 146px);
+  margin: 28px auto 18px;
+  display: grid;
+  grid-template-columns: minmax(360px, 0.82fr) minmax(500px, 1.18fr);
+  background: var(--paper);
+  border: 1px solid rgba(165, 191, 178, 0.55);
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.assignment-panel, .tutor-panel { padding: clamp(24px, 3vw, 44px); }
+.assignment-panel { border-right: 1px solid var(--line); background: rgba(255,255,255,.72); }
+.tutor-panel { background: #f4f8f5; position: relative; }
+
+.panel-heading, .lesson-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--green);
+  text-transform: uppercase;
+  letter-spacing: .13em;
+  font-weight: 800;
+  font-size: 11px;
+}
+
+h1, h2, h3, p { margin-top: 0; }
+h1, h2 { letter-spacing: -0.04em; }
+h1 { margin-bottom: 0; font-size: clamp(26px, 3vw, 38px); line-height: 1.04; }
+h2 { font-size: clamp(25px, 2.7vw, 38px); line-height: 1.08; }
+h3 { font-size: 18px; letter-spacing: -0.02em; }
+
+.step-badge, .lesson-meta span {
+  white-space: nowrap;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: var(--mint-soft);
+  color: var(--green-dark);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.sample-row {
+  margin: 26px 0 18px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.sample-chip {
+  border: 1px solid var(--line);
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: white;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+.sample-chip:hover, .sample-chip.active { border-color: var(--green); background: var(--ink); color: white; }
+
+.upload-zone {
+  min-height: 82px;
+  padding: 14px 16px;
+  display: flex;
+  gap: 13px;
+  align-items: center;
+  border: 1.5px dashed #aac2b6;
+  border-radius: 16px;
+  background: #f8fbf9;
+  cursor: pointer;
+  overflow: hidden;
+}
+.upload-zone:hover { border-color: var(--green); background: var(--mint-soft); }
+.upload-zone input { position: absolute; opacity: 0; pointer-events: none; }
+.upload-zone strong, .upload-zone small { display: block; }
+.upload-zone strong { font-size: 13px; }
+.upload-zone small { margin-top: 3px; color: var(--muted); font-size: 11px; }
+.upload-icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; background: white; color: var(--green); font-size: 21px; }
+#imagePreview { margin-left: auto; width: 58px; height: 50px; border-radius: 8px; object-fit: cover; }
+.upload-note { margin: 8px 2px 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
+
+.field-label { display: block; margin: 20px 0 8px; font-size: 12px; font-weight: 800; }
+textarea {
+  width: 100%;
+  min-height: 184px;
+  padding: 16px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  outline: none;
+  background: white;
+  color: var(--ink);
+  line-height: 1.55;
+  font-size: 14px;
+  box-shadow: inset 0 1px 2px rgba(19,35,30,.03);
+}
+textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(31,107,82,.1); }
+.input-footer { margin-top: 7px; display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; }
+.text-button { padding: 0; border: 0; background: transparent; color: var(--green); font-weight: 700; cursor: pointer; }
+
+fieldset { min-width: 0; }
+.stuck-fieldset { margin: 20px 0; padding: 0; border: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stuck-fieldset legend { margin-bottom: 9px; font-size: 12px; font-weight: 800; }
+.stuck-fieldset label {
+  padding: 10px 11px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: white;
+  cursor: pointer;
+  font-size: 11px;
+}
+.stuck-fieldset label:has(input:checked) { border-color: var(--green); background: var(--mint-soft); color: var(--green-dark); font-weight: 700; }
+.stuck-fieldset input { accent-color: var(--green); }
+
+.primary-button {
+  width: 100%;
+  min-height: 50px;
+  padding: 13px 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--ink);
+  color: white;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 9px 20px rgba(19,35,30,.16);
+}
+.primary-button:hover { background: var(--green-dark); transform: translateY(-1px); }
+.primary-button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+.analyze-button { justify-content: space-between; }
+.form-error { margin: 10px 0 0; color: #b0382d; font-size: 12px; }
+
+.empty-tutor {
+  height: 100%;
+  min-height: 580px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  max-width: 540px;
+  margin: auto;
+}
+.empty-tutor h2 { margin: 8px 0 16px; font-family: Georgia, serif; font-weight: 500; font-size: clamp(37px, 5vw, 62px); }
+.empty-tutor > p:not(.eyebrow) { max-width: 465px; color: var(--muted); line-height: 1.65; font-size: 14px; }
+.orbit { width: 132px; height: 132px; margin-bottom: 28px; position: relative; display: grid; place-items: center; border: 1px solid #bad0c5; border-radius: 50%; }
+.orbit::before { content: ""; position: absolute; inset: 18px; border: 1px dashed #b6cbbf; border-radius: 50%; }
+.orbit div { width: 58px; height: 58px; display: grid; place-items: center; border-radius: 20px 20px 20px 6px; background: var(--ink); color: var(--mint); font-family: Georgia, serif; font-size: 28px; }
+.orbit span { width: 10px; height: 10px; position: absolute; border-radius: 50%; background: var(--coral); }
+.orbit span:nth-child(1) { top: 12px; left: 28px; }
+.orbit span:nth-child(2) { right: 3px; top: 65px; background: var(--yellow); }
+.orbit span:nth-child(3) { left: 19px; bottom: 11px; background: var(--violet); }
+.empty-features { margin-top: 22px; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.empty-features span { padding: 8px 11px; border: 1px solid var(--line); border-radius: 999px; background: white; color: var(--muted); font-size: 11px; }
+
+.lesson-tutor { min-height: 580px; }
+.lesson-header { padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+.lesson-header h2 { margin-bottom: 0; }
+.lesson-meta { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.lesson-meta span:last-child { background: #eeeafd; color: #4f3ea2; }
+
+.lesson-progress { margin: 24px 0 30px; display: grid; grid-template-columns: auto 1fr auto 1fr auto 1fr auto; align-items: center; }
+.lesson-progress i { height: 1px; background: var(--line); }
+.progress-step { padding: 0; border: 0; background: transparent; display: flex; align-items: center; gap: 7px; color: #839189; cursor: pointer; }
+.progress-step span { width: 25px; height: 25px; display: grid; place-items: center; border: 1px solid #c6d2cc; border-radius: 50%; background: #f8fbf9; font-size: 10px; }
+.progress-step strong { font-size: 10px; }
+.progress-step.current, .progress-step.complete { color: var(--green-dark); }
+.progress-step.current span { border-color: var(--ink); background: var(--ink); color: white; }
+.progress-step.complete span { border-color: var(--green); background: var(--mint); color: var(--green-dark); }
+.progress-step:disabled { cursor: default; }
+
+.stage-card { animation: rise .3s ease-out; }
+@keyframes rise { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+.stage-kicker { display: flex; align-items: center; gap: 8px; color: var(--green); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; }
+.stage-kicker span { width: 7px; height: 7px; border-radius: 50%; background: var(--coral); }
+.stage-question { margin: 12px 0 8px; max-width: 720px; font-family: Georgia, serif; font-size: clamp(23px, 3vw, 34px); font-weight: 500; line-height: 1.2; }
+.stage-intro { max-width: 690px; margin-bottom: 22px; color: var(--muted); line-height: 1.55; font-size: 13px; }
+
+.answer-list { display: grid; gap: 9px; }
+.answer-option {
+  width: 100%;
+  padding: 13px 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: white;
+  cursor: pointer;
+  line-height: 1.45;
+  font-size: 13px;
+}
+.answer-option:hover { border-color: #91b5a3; transform: translateX(2px); }
+.answer-option b { width: 22px; height: 22px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 7px; background: var(--soft); color: var(--green); font-size: 10px; }
+.answer-option.selected { border-color: var(--green); background: var(--mint-soft); }
+
+.feedback-box { margin-top: 14px; padding: 14px 15px; border-radius: 13px; border-left: 4px solid var(--green); background: var(--mint-soft); line-height: 1.5; font-size: 13px; }
+.feedback-box.warn { border-color: var(--coral); background: #fff0ec; }
+.feedback-box strong { display: block; margin-bottom: 3px; }
+
+.stage-actions { margin-top: 18px; display: flex; gap: 9px; align-items: center; }
+.stage-actions .primary-button { width: auto; min-width: 170px; }
+.secondary-button {
+  min-height: 45px;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: white;
+  color: var(--green-dark);
+  font-weight: 750;
+  cursor: pointer;
+}
+.secondary-button:hover { border-color: var(--green); background: var(--mint-soft); }
+
+.visual-board {
+  min-height: 275px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid #cbdcd3;
+  background:
+    linear-gradient(rgba(31,107,82,.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(31,107,82,.045) 1px, transparent 1px),
+    #fcfefc;
+  background-size: 22px 22px;
+  overflow: hidden;
+}
+.visual-board svg { width: 100%; height: 260px; display: block; }
+.visual-caption { margin: 13px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.explanation-strip { margin-top: 12px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 13px; background: white; font-size: 13px; line-height: 1.55; }
+.analogy-box { margin-top: 10px; padding: 13px 15px; border-radius: 13px; background: #eeeafd; color: #3d3473; font-size: 13px; line-height: 1.5; }
+
+.video-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.video-card { min-width: 0; border: 1px solid var(--line); border-radius: 15px; overflow: hidden; background: white; color: inherit; text-decoration: none; transition: .18s ease; }
+.video-card:hover { transform: translateY(-3px); box-shadow: 0 12px 25px rgba(20,54,43,.11); border-color: #abc8ba; }
+.video-card img { width: 100%; aspect-ratio: 16 / 9; display: block; object-fit: cover; background: #dce7e1; }
+.video-card div { padding: 11px; }
+.video-card .search-thumb { padding: 0; }
+.video-card span { color: var(--green); font-size: 9px; font-weight: 850; text-transform: uppercase; letter-spacing: .08em; }
+.video-card strong { min-height: 42px; margin-top: 5px; display: block; line-height: 1.35; font-size: 12px; }
+.video-card small { display: block; margin-top: 7px; color: var(--muted); font-size: 10px; }
+.video-search-link { margin-top: 14px; display: inline-flex; color: var(--green); font-size: 12px; font-weight: 800; text-decoration: none; }
+
+.checkpoint-card { padding: 18px; border: 1px solid #cbdcd3; border-radius: 18px; background: white; }
+.checkpoint-card label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 800; }
+.checkpoint-card textarea { min-height: 110px; }
+.success-panel { padding: 23px; border-radius: 18px; background: var(--ink); color: white; }
+.success-panel .eyebrow { color: var(--mint); }
+.success-panel h3 { margin: 6px 0 8px; font-size: 25px; }
+.success-panel p { color: #d6e5de; line-height: 1.55; }
+.mastery-meter { height: 8px; margin-top: 18px; border-radius: 999px; background: rgba(255,255,255,.15); overflow: hidden; }
+.mastery-meter span { width: 100%; height: 100%; display: block; border-radius: inherit; background: var(--mint); animation: fill 1s ease both; }
+@keyframes fill { from { width: 15%; } }
+
+.preferences-dialog {
+  width: min(700px, calc(100% - 28px));
+  max-height: 90vh;
+  padding: 0;
+  border: 0;
+  border-radius: 24px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 35px 100px rgba(10, 34, 25, .35);
+}
+.preferences-dialog::backdrop { background: rgba(8,27,20,.62); backdrop-filter: blur(6px); }
+.preferences-dialog form { padding: clamp(24px, 5vw, 42px); position: relative; }
+.dialog-close { width: 34px; height: 34px; position: absolute; top: 18px; right: 18px; border-radius: 50%; font-size: 21px; line-height: 1; }
+.dialog-intro { max-width: 550px; margin-bottom: 24px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.preference-grid, .focus-settings { margin: 0 0 22px; padding: 0; border: 0; }
+.preference-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.preference-grid legend, .focus-settings legend { width: 100%; margin-bottom: 10px; font-size: 12px; font-weight: 850; }
+.preference-card { min-height: 118px; padding: 14px; border: 1px solid var(--line); border-radius: 15px; background: white; cursor: pointer; }
+.preference-card input { position: absolute; opacity: 0; }
+.preference-card:has(input:checked) { border-color: var(--green); background: var(--mint-soft); box-shadow: inset 0 0 0 1px var(--green); }
+.preference-card strong, .preference-card small { display: block; }
+.preference-card strong { margin: 10px 0 4px; font-size: 13px; }
+.preference-card small { color: var(--muted); line-height: 1.4; font-size: 11px; }
+.preference-icon { min-width: 30px; height: 30px; padding: 0 6px; display: inline-grid; place-items: center; border-radius: 9px; background: white; color: var(--green); font-family: Georgia, serif; font-weight: 800; }
+.focus-settings { padding: 15px; border: 1px solid var(--line); border-radius: 16px; background: white; }
+.switch-row, .select-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.switch-row { padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+.switch-row strong, .switch-row small, .select-row strong, .select-row small { display: block; }
+.switch-row strong, .select-row strong { font-size: 12px; }
+.switch-row small, .select-row small { margin-top: 3px; color: var(--muted); font-size: 10px; }
+.switch-row input { width: 38px; height: 22px; accent-color: var(--green); }
+.select-row select { padding: 8px 28px 8px 9px; border: 1px solid var(--line); border-radius: 9px; background: var(--soft); color: var(--ink); font-size: 11px; }
+.dialog-footnote { margin: 12px 0 0; text-align: center; color: var(--muted); font-size: 10px; }
+
+footer { padding: 4px 20px 25px; text-align: center; color: #75867e; font-size: 10px; }
+
+body.focus-mode .stage-intro { max-width: 540px; }
+body.focus-mode .lesson-stage { max-width: 760px; }
+
+@media (max-width: 980px) {
+  .workspace { grid-template-columns: 1fr; }
+  .assignment-panel { border-right: 0; border-bottom: 1px solid var(--line); }
+  .empty-tutor { min-height: 470px; }
+}
+
+@media (max-width: 620px) {
+  .topbar { min-height: 68px; padding: 12px 16px; }
+  .privacy-pill { display: none; }
+  .workspace { width: 100%; margin: 0; border: 0; border-radius: 0; box-shadow: none; }
+  .assignment-panel, .tutor-panel { padding: 24px 17px; }
+  .panel-heading, .lesson-header { display: block; }
+  .step-badge { margin-top: 12px; display: inline-flex; }
+  .stuck-fieldset { grid-template-columns: 1fr; }
+  .lesson-meta { justify-content: flex-start; margin-top: 12px; }
+  .progress-step strong { display: none; }
+  .video-grid { grid-template-columns: 1fr; }
+  .video-card { display: grid; grid-template-columns: 120px 1fr; }
+  .video-card img { height: 100%; aspect-ratio: auto; }
+  .stage-actions { flex-direction: column; align-items: stretch; }
+  .stage-actions .primary-button { width: 100%; }
+  .preference-grid { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+</style>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Sidecar home">
+        <span class="brand-mark" aria-hidden="true">S</span>
+        <span>
+          <strong>Sidecar</strong>
+          <small>Understand this problem</small>
+        </span>
+      </a>
+      <div class="top-actions">
+        <span class="privacy-pill"><span aria-hidden="true">●</span> Saved on this device</span>
+        <button class="icon-button" id="settingsButton" type="button" aria-label="Open teaching preferences">
+          <span aria-hidden="true">⚙</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="assignment-panel" aria-labelledby="assignmentTitle">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Your assignment</p>
+            <h1 id="assignmentTitle">Where did you get stuck?</h1>
+          </div>
+          <span class="step-badge">1 · Add a problem</span>
+        </div>
+
+        <div class="sample-row" aria-label="Sample problems">
+          <span>Try a sample:</span>
+          <button class="sample-chip active" data-sample="accounting" type="button">Accounting</button>
+          <button class="sample-chip" data-sample="algebra" type="button">Algebra</button>
+          <button class="sample-chip" data-sample="chemistry" type="button">Chemistry</button>
+          <button class="sample-chip" data-sample="economics" type="button">Economics</button>
+        </div>
+
+        <label class="upload-zone" for="imageInput" id="uploadZone">
+          <input id="imageInput" type="file" accept="image/*" />
+          <span class="upload-icon" aria-hidden="true">↥</span>
+          <span>
+            <strong>Add a homework screenshot</strong>
+            <small>Optional reference · PNG, JPG, or HEIC</small>
+          </span>
+          <img id="imagePreview" alt="Homework screenshot preview" hidden />
+        </label>
+        <p class="upload-note" id="uploadNote" hidden>
+          Screenshot attached as a visual reference. Paste the problem text below so the contest demo remains reliable.
+        </p>
+
+        <label class="field-label" for="problemInput">Problem text</label>
+        <textarea
+          id="problemInput"
+          rows="9"
+          spellcheck="true"
+          placeholder="Paste the exact question, including the numbers and answer choices…"
+        ></textarea>
+        <div class="input-footer">
+          <span id="characterCount">0 characters</span>
+          <button class="text-button" id="clearButton" type="button">Clear</button>
+        </div>
+
+        <fieldset class="stuck-fieldset">
+          <legend>What feels stuck?</legend>
+          <label><input type="radio" name="stuck" value="terms" /> I don't understand the terms</label>
+          <label><input type="radio" name="stuck" value="start" checked /> I don't know the first step</label>
+          <label><input type="radio" name="stuck" value="wrong" /> I tried, but my answer is wrong</label>
+          <label><input type="radio" name="stuck" value="why" /> I know the steps, not the reason</label>
+        </fieldset>
+
+        <button class="primary-button analyze-button" id="analyzeButton" type="button">
+          <span>Build my mini-lesson</span>
+          <span aria-hidden="true">→</span>
+        </button>
+        <p class="form-error" id="formError" role="alert" hidden></p>
+      </section>
+
+      <section class="tutor-panel" aria-labelledby="tutorTitle">
+        <div id="emptyTutor" class="empty-tutor">
+          <div class="orbit" aria-hidden="true">
+            <span></span><span></span><span></span>
+            <div>?</div>
+          </div>
+          <p class="eyebrow">Your sidecar is ready</p>
+          <h2 id="tutorTitle">Not the answer.<br />The way through.</h2>
+          <p>
+            Add one problem. Sidecar will find the missing concept, teach it your way, and check that you can continue on your own.
+          </p>
+          <div class="empty-features" aria-label="Sidecar features">
+            <span>Diagnose the gap</span>
+            <span>Draw it out</span>
+            <span>Find the right lesson</span>
+          </div>
+        </div>
+
+        <div id="lessonTutor" class="lesson-tutor" hidden>
+          <div class="lesson-header">
+            <div>
+              <p class="eyebrow" id="subjectLabel">Financial accounting</p>
+              <h2 id="conceptTitle">Expense recognition</h2>
+            </div>
+            <div class="lesson-meta">
+              <span id="preferenceBadge">Visual first</span>
+              <span id="focusBadge">3-minute focus</span>
+            </div>
+          </div>
+
+          <nav class="lesson-progress" aria-label="Mini-lesson progress">
+            <button class="progress-step current" data-step="0" type="button">
+              <span>1</span><strong>Diagnose</strong>
+            </button>
+            <i></i>
+            <button class="progress-step" data-step="1" type="button" disabled>
+              <span>2</span><strong>See it</strong>
+            </button>
+            <i></i>
+            <button class="progress-step" data-step="2" type="button" disabled>
+              <span>3</span><strong>Watch</strong>
+            </button>
+            <i></i>
+            <button class="progress-step" data-step="3" type="button" disabled>
+              <span>4</span><strong>Prove it</strong>
+            </button>
+          </nav>
+
+          <div class="lesson-stage" id="stageContainer" aria-live="polite"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>Sidecar teaches the concept around your assignment. Always verify course-specific rules with your instructor.</p>
+    </footer>
+
+    <dialog id="preferencesDialog" class="preferences-dialog">
+      <form method="dialog" id="preferencesForm">
+        <button class="dialog-close" id="closeDialogButton" type="button" aria-label="Close preferences">×</button>
+        <p class="eyebrow">Teaching preferences</p>
+        <h2>How should Sidecar teach?</h2>
+        <p class="dialog-intro">Choose a starting format. You can change it whenever a different explanation would help.</p>
+
+        <fieldset class="preference-grid">
+          <legend>Start with</legend>
+          <label class="preference-card">
+            <input type="radio" name="teachingStyle" value="visual" checked />
+            <span class="preference-icon" aria-hidden="true">◇</span>
+            <strong>Draw it visually</strong>
+            <small>Diagrams, timelines, and spatial relationships first</small>
+          </label>
+          <label class="preference-card">
+            <input type="radio" name="teachingStyle" value="example" />
+            <span class="preference-icon" aria-hidden="true">123</span>
+            <strong>Work an example</strong>
+            <small>Concrete numbers before the general rule</small>
+          </label>
+          <label class="preference-card">
+            <input type="radio" name="teachingStyle" value="questions" />
+            <span class="preference-icon" aria-hidden="true">?</span>
+            <strong>Ask me questions</strong>
+            <small>Guide me without revealing the next step</small>
+          </label>
+          <label class="preference-card">
+            <input type="radio" name="teachingStyle" value="analogy" />
+            <span class="preference-icon" aria-hidden="true">≈</span>
+            <strong>Use an analogy</strong>
+            <small>Connect the idea to an everyday situation</small>
+          </label>
+        </fieldset>
+
+        <fieldset class="focus-settings">
+          <legend>Attention support</legend>
+          <label class="switch-row">
+            <span>
+              <strong>Focus mode</strong>
+              <small>One action at a time, shorter text, visible progress</small>
+            </span>
+            <input id="focusModeInput" type="checkbox" checked />
+          </label>
+          <label class="select-row">
+            <span>
+              <strong>Lesson round</strong>
+              <small>Set a comfortable amount of focused time</small>
+            </span>
+            <select id="focusLengthInput">
+              <option value="3">3 minutes</option>
+              <option value="5">5 minutes</option>
+              <option value="10">10 minutes</option>
+            </select>
+          </label>
+        </fieldset>
+
+        <button class="primary-button" id="savePreferencesButton" value="default" type="submit">
+          Save my teaching setup
+        </button>
+        <p class="dialog-footnote">This changes presentation and pacing. It does not diagnose a learning condition.</p>
+      </form>
+    </dialog>
+
+    <script>
+const STORAGE_KEY = "sidecar-preferences-v1";
+const HISTORY_KEY = "sidecar-history-v1";
+
+const samples = {
+  accounting:
+    "On October 1, a company paid $2,400 for a 12-month insurance policy and recorded it as Prepaid Insurance. What adjusting entry should be made on December 31?",
+  algebra: "Solve for x and explain the first step: 3(x - 4) = 18.",
+  chemistry:
+    "For the balanced equation 2H₂ + O₂ → 2H₂O, how many moles of water can form from 3 moles of O₂ when hydrogen is in excess?",
+  economics:
+    "If consumer income rises and the product is a normal good while supply stays unchanged, what happens to equilibrium price and quantity?",
+};
+
+const lessons = [
+  {
+    id: "accounting-prepaid",
+    subject: "Financial accounting",
+    concept: "Timing prepaid expenses",
+    keywords: ["prepaid", "insurance", "adjusting entry", "expired", "asset", "expense", "12-month"],
+    diagnostic: "Why is the payment recorded as an asset on October 1 instead of immediately becoming an expense?",
+    options: [
+      "Because insurance payments are always assets.",
+      "Because most of the future coverage has not been used yet.",
+      "Because cash cannot be exchanged for an expense.",
+    ],
+    correct: 1,
+    correctFeedback: "Exactly. The asset represents insurance coverage the company still controls and can use in future months.",
+    wrongFeedback:
+      "The key is not when cash moved. Expense recognition follows when the insurance benefit is consumed. On October 1, nearly all of that benefit is still in the future.",
+    visualType: "timeline",
+    explanation:
+      "Three of twelve months have expired by December 31. Move 3/12 of $2,400—$600—from Prepaid Insurance into Insurance Expense.",
+    example:
+      "Think in coverage-months: $2,400 ÷ 12 = $200 each month. October, November, and December have been used, so 3 × $200 = $600.",
+    analogy:
+      "It is like loading twelve rides onto a transit card. Paying for the card is not the same as taking every ride; the value becomes an expense one ride—or month—at a time.",
+    videos: [
+      { id: "xMn1X84MAII", title: "Prepaid insurance explained", source: "Edspira", match: "Exact concept" },
+      { id: "sIVRAgsZU1E", title: "Adjusting entries: prepaid insurance", source: "Accounting lecture", match: "Worked entry" },
+      { id: "2yUNJiYbrZE", title: "Adjusting entries practice", source: "Accounting examples", match: "Practice next" },
+    ],
+    searchQuery: "prepaid insurance adjusting entry worked example",
+    checkpoint:
+      "A company pays $3,600 on November 1 for 12 months of insurance. On January 31, what amount should be debited to Insurance Expense, and what account is credited?",
+    answerHint: "First find the monthly cost, then count November through January.",
+    validate: (answer) => /900/.test(answer) && /prepaid/i.test(answer),
+    expected: "Debit Insurance Expense $900; credit Prepaid Insurance $900.",
+  },
+  {
+    id: "algebra-linear",
+    subject: "College algebra",
+    concept: "Undoing a linear equation",
+    keywords: ["solve for x", "equation", "3(x", "linear", "algebra", "distribute"],
+    diagnostic: "For 3(x − 4) = 18, which first move keeps the equation simplest?",
+    options: ["Add 4 to both sides.", "Divide both sides by 3.", "Subtract 18 from both sides."],
+    correct: 1,
+    correctFeedback: "Yes. Dividing by 3 removes the outside operation first and leaves x − 4 = 6.",
+    wrongFeedback:
+      "Work from the outside inward. The entire quantity (x − 4) is multiplied by 3, so undo that multiplication first.",
+    visualType: "balance",
+    explanation: "An equation is a balanced scale. Whatever operation you apply to the left side must also be applied to the right side.",
+    example: "3(x − 4) = 18 → divide both sides by 3 → x − 4 = 6 → add 4 to both sides → x = 10.",
+    analogy: "Three identical bags weigh 18 pounds. First find one bag: 18 ÷ 3 = 6. Then undo what is inside the bag.",
+    videos: [
+      { id: "9Ek61w1LxSc", title: "Equations of the form ax = b", source: "Khan Academy", match: "First operation" },
+      { id: "JQCFvzXa8Bo", title: "Linear equations and intercepts", source: "Math lesson", match: "Visual connection" },
+      { id: "2EwPpga_XPw", title: "Systems with substitution", source: "Khan Academy", match: "Next concept" },
+    ],
+    searchQuery: "solve multi step linear equations parentheses",
+    checkpoint: "Solve 4(x + 2) = 28. Give x and name the first operation you used.",
+    answerHint: "Undo the multiplication outside the parentheses before the addition inside.",
+    validate: (answer) => /(?:x\s*=\s*)?5\b/.test(answer) && /(divid|\/\s*4)/i.test(answer),
+    expected: "x = 5. First divide both sides by 4.",
+  },
+  {
+    id: "chemistry-stoichiometry",
+    subject: "General chemistry",
+    concept: "Reading mole ratios",
+    keywords: ["moles", "stoichiometry", "balanced equation", "h₂", "o₂", "h2", "o2", "mole ratio"],
+    diagnostic: "In 2H₂ + O₂ → 2H₂O, what do the coefficients 1 and 2 tell you about O₂ and H₂O?",
+    options: ["Their masses are in a 1:2 ratio.", "Their moles react in a 1:2 ratio.", "One oxygen atom creates two water molecules."],
+    correct: 1,
+    correctFeedback: "Correct. Coefficients compare particles or moles—not grams directly.",
+    wrongFeedback: "Balanced-equation coefficients give a mole ratio. Here, every 1 mole of O₂ can produce 2 moles of H₂O.",
+    visualType: "molecules",
+    explanation: "Treat the balanced equation like a recipe: one O₂ batch produces two H₂O batches when hydrogen is available.",
+    example: "3 mol O₂ × (2 mol H₂O ÷ 1 mol O₂) = 6 mol H₂O.",
+    analogy: "One carton plus two lids makes two sealed cups. Three cartons support six cups when you have enough lids.",
+    videos: [
+      { id: "wySZDEbqbnM", title: "Mole-ratio conversions", source: "Chemistry tutorial", match: "Exact skill" },
+      { id: "XnfATaoubzA", title: "Stoichiometry step by step", source: "Crash Chemistry", match: "Worked practice" },
+      { id: "HbIdp5DURJA", title: "Visual balancing equations", source: "Khan Academy", match: "Prerequisite" },
+    ],
+    searchQuery: "stoichiometry mole ratio balanced equation practice",
+    checkpoint: "For N₂ + 3H₂ → 2NH₃, how many moles of NH₃ form from 4 moles of N₂ when H₂ is in excess?",
+    answerHint: "Use the coefficient ratio between N₂ and NH₃.",
+    validate: (answer) => /8/.test(answer) && /(mol|mole)/i.test(answer),
+    expected: "8 moles of NH₃.",
+  },
+  {
+    id: "economics-demand",
+    subject: "Microeconomics",
+    concept: "A demand shift at equilibrium",
+    keywords: ["demand", "supply", "equilibrium", "normal good", "consumer income", "price and quantity"],
+    diagnostic: "If income rises for a normal good, what changes first on the graph?",
+    options: ["Movement along the existing demand curve.", "The entire demand curve shifts right.", "The supply curve shifts left."],
+    correct: 1,
+    correctFeedback: "Right. Income is a demand shifter, so the whole curve moves rather than the market moving along one curve.",
+    wrongFeedback: "A product's own price causes movement along demand. Income is an outside determinant, so it shifts the entire demand curve.",
+    visualType: "curves",
+    explanation: "With supply fixed, a rightward demand shift creates a new intersection at both a higher price and higher quantity.",
+    example: "Demand moves D₁ → D₂ while S stays fixed. The equilibrium moves up and right: P rises and Q rises.",
+    analogy: "A concert venue has the same number of seats, but more people suddenly want tickets. The clearing price rises and more seats get sold.",
+    videos: [
+      { id: "PEMkfgrifDw", title: "Market equilibrium", source: "Khan Academy", match: "Core concept" },
+      { id: "kl4n-EWwPyA", title: "Changes in equilibrium", source: "Khan Academy", match: "Exact shift" },
+      { id: "0isM0GF-rMI", title: "Factors affecting supply", source: "Khan Academy", match: "Compare next" },
+    ],
+    searchQuery: "increase in demand equilibrium price quantity graph",
+    checkpoint: "A new health study makes consumers want more blueberries while supply is unchanged. What happens to equilibrium price and quantity?",
+    answerHint: "Draw the demand curve shifting right while holding supply still.",
+    validate: (answer) => /(price.*(?:rise|increase|higher)|(?:rise|increase|higher).*price)/i.test(answer) && /(quantity.*(?:rise|increase|higher)|(?:rise|increase|higher).*quantity)/i.test(answer),
+    expected: "Both equilibrium price and equilibrium quantity increase.",
+  },
+];
+
+const genericLesson = {
+  id: "generic",
+  subject: "Homework support",
+  concept: "Finding the first move",
+  diagnostic: "Before calculating, which action is most likely to reveal what this problem is testing?",
+  options: ["List what is known and what must be found.", "Search the entire question verbatim.", "Guess an answer and work backward."],
+  correct: 0,
+  correctFeedback: "Good. Separating the given information from the target usually exposes the missing relationship.",
+  wrongFeedback: "Start by separating the facts you have from the exact thing the question asks you to find. That reduces the problem before you choose a method.",
+  visualType: "flow",
+  explanation: "Rewrite the problem as Given → Relationship → Find. Then identify the single concept that connects the first box to the last.",
+  example: "Given: facts and numbers. Find: the requested output. Bridge: the rule, definition, or relationship that connects them.",
+  analogy: "Treat the question like directions: mark your starting point, destination, and the one road that connects them.",
+  videos: [],
+  searchQuery: "",
+  checkpoint: "In your own words, name what is given, what must be found, and the first relationship you would try.",
+  answerHint: "Use three short phrases: Given…, Find…, First relationship…",
+  validate: (answer) => answer.trim().length >= 45 && /(given|know|provided)/i.test(answer) && /(find|solve|need)/i.test(answer),
+  expected: "A complete answer identifies the given information, the target, and a plausible first relationship.",
+};
+
+const state = {
+  preferences: loadPreferences(),
+  lesson: null,
+  problem: "",
+  stage: 0,
+  unlocked: 0,
+  diagnosisAnswered: false,
+  checkpointComplete: false,
+  attempts: 0,
+};
+
+const elements = {
+  dialog: document.querySelector("#preferencesDialog"),
+  preferencesForm: document.querySelector("#preferencesForm"),
+  settingsButton: document.querySelector("#settingsButton"),
+  problemInput: document.querySelector("#problemInput"),
+  imageInput: document.querySelector("#imageInput"),
+  imagePreview: document.querySelector("#imagePreview"),
+  uploadNote: document.querySelector("#uploadNote"),
+  characterCount: document.querySelector("#characterCount"),
+  clearButton: document.querySelector("#clearButton"),
+  analyzeButton: document.querySelector("#analyzeButton"),
+  formError: document.querySelector("#formError"),
+  emptyTutor: document.querySelector("#emptyTutor"),
+  lessonTutor: document.querySelector("#lessonTutor"),
+  stageContainer: document.querySelector("#stageContainer"),
+  subjectLabel: document.querySelector("#subjectLabel"),
+  conceptTitle: document.querySelector("#conceptTitle"),
+  preferenceBadge: document.querySelector("#preferenceBadge"),
+  focusBadge: document.querySelector("#focusBadge"),
+};
+
+function loadPreferences() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || { style: "visual", focusMode: true, focusLength: "3" };
+  } catch {
+    return { style: "visual", focusMode: true, focusLength: "3" };
+  }
+}
+
+function savePreferences() {
+  const formData = new FormData(elements.preferencesForm);
+  state.preferences = {
+    style: formData.get("teachingStyle") || "visual",
+    focusMode: document.querySelector("#focusModeInput").checked,
+    focusLength: document.querySelector("#focusLengthInput").value,
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.preferences));
+  applyPreferences();
+}
+
+function applyPreferences() {
+  const styleLabels = { visual: "Visual first", example: "Example first", questions: "Question first", analogy: "Analogy first" };
+  elements.preferenceBadge.textContent = styleLabels[state.preferences.style];
+  elements.focusBadge.textContent = state.preferences.focusMode ? `${state.preferences.focusLength}-minute focus` : "Full lesson";
+  document.body.classList.toggle("focus-mode", state.preferences.focusMode);
+}
+
+function syncPreferencesForm() {
+  const styleInput = document.querySelector(`input[name="teachingStyle"][value="${state.preferences.style}"]`);
+  if (styleInput) styleInput.checked = true;
+  document.querySelector("#focusModeInput").checked = Boolean(state.preferences.focusMode);
+  document.querySelector("#focusLengthInput").value = state.preferences.focusLength || "3";
+}
+
+function findLesson(problem) {
+  const normalized = problem.toLowerCase();
+  let best = { lesson: genericLesson, score: 0 };
+  for (const lesson of lessons) {
+    const score = lesson.keywords.reduce((total, keyword) => total + (normalized.includes(keyword) ? keyword.length : 0), 0);
+    if (score > best.score) best = { lesson, score };
+  }
+  const selected = best.score >= 3 ? { ...best.lesson } : { ...genericLesson };
+  if (selected.id === "generic") {
+    const cleaned = problem.replace(/[^a-zA-Z0-9\s-]/g, " ").replace(/\s+/g, " ").trim();
+    const words = cleaned.split(" ").filter((word) => word.length > 3).slice(0, 6);
+    selected.concept = words.length ? `First move: ${words.join(" ")}` : "Finding the first move";
+    selected.searchQuery = `${cleaned.slice(0, 120)} explained lesson`;
+    selected.videos = buildSearchVideos(selected.searchQuery);
+  }
+  return selected;
+}
+
+function buildSearchVideos(query) {
+  const encoded = encodeURIComponent(query);
+  return [
+    { search: `https://www.youtube.com/results?search_query=${encoded}`, title: "Find a focused explanation", source: "YouTube search", match: "Your exact topic" },
+    { search: `https://www.youtube.com/results?search_query=${encodeURIComponent(`${query} worked example`)}`, title: "See a worked example", source: "YouTube search", match: "Example" },
+    { search: `https://www.youtube.com/results?search_query=${encodeURIComponent(`${query} visual explanation`)}`, title: "Watch a visual lesson", source: "YouTube search", match: "Visual" },
+  ];
+}
+
+function escapeHTML(value) {
+  return String(value).replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character]));
+}
+
+function setSample(key) {
+  elements.problemInput.value = samples[key];
+  updateCharacterCount();
+  document.querySelectorAll(".sample-chip").forEach((button) => button.classList.toggle("active", button.dataset.sample === key));
+  elements.formError.hidden = true;
+}
+
+function updateCharacterCount() {
+  elements.characterCount.textContent = `${elements.problemInput.value.length} characters`;
+}
+
+function startLesson() {
+  const problem = elements.problemInput.value.trim();
+  if (problem.length < 12) {
+    elements.formError.textContent = "Add the full problem so Sidecar has enough context to teach it.";
+    elements.formError.hidden = false;
+    elements.problemInput.focus();
+    return;
+  }
+  elements.formError.hidden = true;
+  state.problem = problem;
+  state.lesson = findLesson(problem);
+  state.stage = 0;
+  state.unlocked = 0;
+  state.diagnosisAnswered = false;
+  state.checkpointComplete = false;
+  state.attempts = 0;
+
+  const stuckReason = document.querySelector('input[name="stuck"]:checked')?.value || "start";
+  state.stuckReason = stuckReason;
+
+  elements.emptyTutor.hidden = true;
+  elements.lessonTutor.hidden = false;
+  elements.subjectLabel.textContent = state.lesson.subject;
+  elements.conceptTitle.textContent = state.lesson.concept;
+  applyPreferences();
+  renderStage();
+  recordHistory();
+  if (window.innerWidth < 980) elements.lessonTutor.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function recordHistory() {
+  try {
+    const history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
+    history.unshift({ concept: state.lesson.concept, date: new Date().toISOString(), complete: false });
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 12)));
+  } catch {
+    // The lesson remains fully functional if storage is unavailable.
+  }
+}
+
+function renderProgress() {
+  document.querySelectorAll(".progress-step").forEach((button) => {
+    const step = Number(button.dataset.step);
+    button.disabled = step > state.unlocked;
+    button.classList.toggle("current", step === state.stage);
+    button.classList.toggle("complete", step < state.stage || (step === 3 && state.checkpointComplete));
+  });
+}
+
+function renderStage() {
+  renderProgress();
+  if (state.stage === 0) renderDiagnosis();
+  if (state.stage === 1) renderVisual();
+  if (state.stage === 2) renderVideos();
+  if (state.stage === 3) renderCheckpoint();
+}
+
+function renderDiagnosis() {
+  const lesson = state.lesson;
+  const reasonCopy = {
+    terms: "Let's locate the one definition that unlocks the language.",
+    start: "Let's find the first decision before doing any calculation.",
+    wrong: "Let's test the assumption that may have sent your attempt off course.",
+    why: "Let's connect the procedure to the reason it works.",
+  };
+  elements.stageContainer.innerHTML = `
+    <article class="stage-card">
+      <p class="stage-kicker"><span></span> 30-second diagnosis</p>
+      <h3 class="stage-question">${escapeHTML(lesson.diagnostic)}</h3>
+      <p class="stage-intro">${escapeHTML(reasonCopy[state.stuckReason])} Choose your current best answer—being wrong helps the tutor start in the right place.</p>
+      <div class="answer-list">
+        ${lesson.options.map((option, index) => `
+          <button class="answer-option" data-answer="${index}" type="button">
+            <b>${String.fromCharCode(65 + index)}</b><span>${escapeHTML(option)}</span>
+          </button>`).join("")}
+      </div>
+      <div id="diagnosisFeedback"></div>
+    </article>`;
+
+  document.querySelectorAll(".answer-option").forEach((button) => {
+    button.addEventListener("click", () => answerDiagnosis(Number(button.dataset.answer), button));
+  });
+}
+
+function answerDiagnosis(index, button) {
+  if (state.diagnosisAnswered) return;
+  state.diagnosisAnswered = true;
+  const correct = index === state.lesson.correct;
+  document.querySelectorAll(".answer-option").forEach((option) => option.disabled = true);
+  button.classList.add("selected");
+  state.unlocked = Math.max(state.unlocked, 1);
+  const feedback = document.querySelector("#diagnosisFeedback");
+  feedback.innerHTML = `
+    <div class="feedback-box ${correct ? "" : "warn"}">
+      <strong>${correct ? "You have the foundation." : "Found the gap."}</strong>
+      ${escapeHTML(correct ? state.lesson.correctFeedback : state.lesson.wrongFeedback)}
+    </div>
+    <div class="stage-actions">
+      <button class="primary-button" id="continueToVisual" type="button">Show me another way →</button>
+    </div>`;
+  document.querySelector("#continueToVisual").addEventListener("click", () => goToStage(1));
+  renderProgress();
+}
+
+function getPreferredTeaching(lesson) {
+  if (state.preferences.style === "example") return { label: "Worked example first", text: lesson.example };
+  if (state.preferences.style === "questions") return { label: "Question-first coaching", text: `Before reading the rule, point to the relationship in the drawing that changes. Then explain what stayed fixed.` };
+  if (state.preferences.style === "analogy") return { label: "Everyday analogy", text: lesson.analogy };
+  return { label: "Visual explanation", text: lesson.explanation };
+}
+
+function renderVisual() {
+  const preferred = getPreferredTeaching(state.lesson);
+  elements.stageContainer.innerHTML = `
+    <article class="stage-card">
+      <p class="stage-kicker"><span></span> ${escapeHTML(preferred.label)}</p>
+      <h3 class="stage-question">Let's draw the relationship—not memorize a rule.</h3>
+      <p class="stage-intro">Sidecar changed the explanation using your teaching setup. Nothing from the original answer is required to follow this model.</p>
+      <div class="visual-board">${drawVisual(state.lesson.visualType)}</div>
+      <p class="visual-caption">The highlighted movement is the part of the original problem you need to reason about.</p>
+      <div class="explanation-strip"><strong>What to notice:</strong> ${escapeHTML(preferred.text)}</div>
+      ${state.preferences.style !== "analogy" ? `<div class="analogy-box" id="analogyBox" hidden><strong>Another way:</strong> ${escapeHTML(state.lesson.analogy)}</div>` : ""}
+      <div class="stage-actions">
+        <button class="primary-button" id="continueToVideos" type="button">Find the right lesson →</button>
+        ${state.preferences.style !== "analogy" ? `<button class="secondary-button" id="anotherWayButton" type="button">Use an analogy</button>` : ""}
+      </div>
+    </article>`;
+  state.unlocked = Math.max(state.unlocked, 2);
+  document.querySelector("#continueToVideos").addEventListener("click", () => goToStage(2));
+  const anotherWayButton = document.querySelector("#anotherWayButton");
+  if (anotherWayButton) anotherWayButton.addEventListener("click", () => {
+    document.querySelector("#analogyBox").hidden = false;
+    anotherWayButton.disabled = true;
+    anotherWayButton.textContent = "Analogy shown";
+  });
+  renderProgress();
+}
+
+function drawVisual(type) {
+  if (type === "timeline") {
+    const months = ["Oct", "Nov", "Dec", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep"];
+    return `<svg viewBox="0 0 720 260" role="img" aria-label="Insurance coverage timeline and adjusting entry">
+      <text x="24" y="29" fill="#13231e" font-size="16" font-weight="700">$2,400 buys 12 months of future coverage</text>
+      ${months.map((month, i) => `<g transform="translate(${24 + i * 56},58)"><rect width="47" height="46" rx="9" fill="${i < 3 ? "#f1785b" : "#dff3ea"}"/><text x="23.5" y="27" text-anchor="middle" fill="${i < 3 ? "white" : "#1f6b52"}" font-size="11" font-weight="700">${month}</text></g>`).join("")}
+      <path d="M 52 124 C 90 162, 142 162, 176 124" fill="none" stroke="#f1785b" stroke-width="3"/>
+      <text x="114" y="178" text-anchor="middle" fill="#b64a34" font-size="13" font-weight="700">3 used months = $600 expense</text>
+      <rect x="390" y="140" width="142" height="76" rx="13" fill="#13231e"/><text x="461" y="165" text-anchor="middle" fill="#bdebd8" font-size="11">PREPAID INSURANCE</text><text x="461" y="194" text-anchor="middle" fill="white" font-size="22" font-weight="700">− $600</text>
+      <path d="M 540 178 L 586 178" stroke="#1f6b52" stroke-width="4"/><path d="M 580 171 L 591 178 L 580 185" fill="none" stroke="#1f6b52" stroke-width="4"/>
+      <rect x="596" y="140" width="100" height="76" rx="13" fill="#bdebd8"/><text x="646" y="165" text-anchor="middle" fill="#114535" font-size="10">INSURANCE EXP.</text><text x="646" y="194" text-anchor="middle" fill="#114535" font-size="20" font-weight="700">+$600</text>
+    </svg>`;
+  }
+  if (type === "balance") {
+    return `<svg viewBox="0 0 720 260" role="img" aria-label="Balanced equation scale">
+      <text x="24" y="30" fill="#13231e" font-size="16" font-weight="700">Keep both sides balanced</text>
+      <line x1="360" y1="75" x2="360" y2="214" stroke="#13231e" stroke-width="5"/><path d="M315 222 L405 222 L360 184 Z" fill="#13231e"/>
+      <line x1="130" y1="96" x2="590" y2="96" stroke="#1f6b52" stroke-width="6"/><line x1="160" y1="96" x2="160" y2="145" stroke="#1f6b52" stroke-width="3"/><line x1="560" y1="96" x2="560" y2="145" stroke="#1f6b52" stroke-width="3"/>
+      <rect x="74" y="145" width="172" height="66" rx="14" fill="#f1785b"/><text x="160" y="185" text-anchor="middle" fill="white" font-size="25" font-weight="700">3(x − 4)</text>
+      <rect x="474" y="145" width="172" height="66" rx="14" fill="#bdebd8"/><text x="560" y="185" text-anchor="middle" fill="#114535" font-size="25" font-weight="700">18</text>
+      <text x="360" y="55" text-anchor="middle" fill="#6956bd" font-size="14" font-weight="700">÷ 3 on both sides</text>
+    </svg>`;
+  }
+  if (type === "molecules") {
+    return `<svg viewBox="0 0 720 260" role="img" aria-label="Mole ratio diagram">
+      <text x="24" y="30" fill="#13231e" font-size="16" font-weight="700">Read coefficients like a recipe</text>
+      <g transform="translate(60 75)"><circle cx="38" cy="38" r="29" fill="#f1785b"/><circle cx="88" cy="38" r="29" fill="#f1785b"/><text x="63" y="102" text-anchor="middle" font-size="13" font-weight="700">2 H₂</text></g>
+      <text x="205" y="121" fill="#60716a" font-size="28">+</text>
+      <g transform="translate(250 75)"><circle cx="38" cy="38" r="29" fill="#6956bd"/><text x="38" y="102" text-anchor="middle" font-size="13" font-weight="700">1 O₂</text></g>
+      <path d="M350 113 L435 113" stroke="#1f6b52" stroke-width="5"/><path d="M424 101 L440 113 L424 125" fill="none" stroke="#1f6b52" stroke-width="5"/>
+      <g transform="translate(470 68)"><circle cx="43" cy="43" r="31" fill="#bdebd8"/><circle cx="16" cy="20" r="17" fill="#f1785b"/><circle cx="70" cy="20" r="17" fill="#f1785b"/><text x="43" y="118" text-anchor="middle" font-size="13" font-weight="700">2 H₂O</text></g>
+      <text x="360" y="222" text-anchor="middle" fill="#114535" font-size="19" font-weight="700">3 mol O₂ × 2 = 6 mol H₂O</text>
+    </svg>`;
+  }
+  if (type === "curves") {
+    return `<svg viewBox="0 0 720 260" role="img" aria-label="Supply and demand graph with demand shifting right">
+      <text x="24" y="30" fill="#13231e" font-size="16" font-weight="700">Income shifts demand; supply stays fixed</text>
+      <line x1="105" y1="220" x2="650" y2="220" stroke="#13231e" stroke-width="3"/><line x1="105" y1="220" x2="105" y2="52" stroke="#13231e" stroke-width="3"/>
+      <path d="M170 195 C270 160, 400 100, 560 62" fill="none" stroke="#1f6b52" stroke-width="5"/><text x="568" y="61" fill="#1f6b52" font-size="15" font-weight="700">S</text>
+      <path d="M178 70 C310 107, 420 160, 530 205" fill="none" stroke="#9b8bdc" stroke-width="4" stroke-dasharray="8 7"/><text x="537" y="207" fill="#6956bd" font-size="14">D₁</text>
+      <path d="M255 60 C380 96, 500 150, 620 198" fill="none" stroke="#f1785b" stroke-width="5"/><text x="627" y="201" fill="#b64a34" font-size="15" font-weight="700">D₂</text>
+      <circle cx="443" cy="125" r="8" fill="#13231e"/><path d="M378 112 C398 82, 425 75, 454 83" fill="none" stroke="#f1785b" stroke-width="3"/><path d="M444 76 L458 83 L447 94" fill="none" stroke="#f1785b" stroke-width="3"/>
+      <text x="380" y="99" fill="#b64a34" font-size="12" font-weight="700">price ↑ · quantity ↑</text>
+    </svg>`;
+  }
+  return `<svg viewBox="0 0 720 260" role="img" aria-label="Given relationship find problem-solving flow">
+    <text x="24" y="30" fill="#13231e" font-size="16" font-weight="700">Shrink the question into three boxes</text>
+    <rect x="42" y="85" width="170" height="96" rx="18" fill="#bdebd8"/><text x="127" y="120" text-anchor="middle" fill="#114535" font-size="12" font-weight="700">GIVEN</text><text x="127" y="150" text-anchor="middle" fill="#114535" font-size="17">facts + values</text>
+    <path d="M224 133 L278 133" stroke="#1f6b52" stroke-width="4"/><path d="M267 122 L282 133 L267 144" fill="none" stroke="#1f6b52" stroke-width="4"/>
+    <rect x="290" y="70" width="170" height="126" rx="18" fill="#13231e"/><text x="375" y="113" text-anchor="middle" fill="#bdebd8" font-size="12" font-weight="700">RELATIONSHIP</text><text x="375" y="144" text-anchor="middle" fill="white" font-size="17">one rule connects</text><text x="375" y="167" text-anchor="middle" fill="white" font-size="17">the two sides</text>
+    <path d="M472 133 L526 133" stroke="#1f6b52" stroke-width="4"/><path d="M515 122 L530 133 L515 144" fill="none" stroke="#1f6b52" stroke-width="4"/>
+    <rect x="538" y="85" width="140" height="96" rx="18" fill="#f1785b"/><text x="608" y="120" text-anchor="middle" fill="white" font-size="12" font-weight="700">FIND</text><text x="608" y="150" text-anchor="middle" fill="white" font-size="17">exact target</text>
+  </svg>`;
+}
+
+function renderVideos() {
+  const lesson = state.lesson;
+  const videoCards = lesson.videos.map((video) => {
+    const href = video.id ? `https://www.youtube.com/watch?v=${video.id}` : video.search;
+    const image = video.id
+      ? `<img src="https://i.ytimg.com/vi/${video.id}/hqdefault.jpg" alt="" loading="lazy" />`
+      : `<div class="search-thumb" aria-hidden="true" style="aspect-ratio:16/9;display:grid;place-items:center;background:#13231e;color:#bdebd8;font-size:30px">▶</div>`;
+    return `<a class="video-card" href="${href}" target="_blank" rel="noopener noreferrer">
+      ${image}<div><span>${escapeHTML(video.match)}</span><strong>${escapeHTML(video.title)}</strong><small>${escapeHTML(video.source)} ↗</small></div>
+    </a>`;
+  }).join("");
+  const searchHref = `https://www.youtube.com/results?search_query=${encodeURIComponent(lesson.searchQuery)}`;
+  elements.stageContainer.innerHTML = `
+    <article class="stage-card">
+      <p class="stage-kicker"><span></span> Videos matched to the missing concept</p>
+      <h3 class="stage-question">Skip the chapter. Watch only what unlocks this problem.</h3>
+      <p class="stage-intro">These links target <strong>${escapeHTML(lesson.concept)}</strong>, not the entire course unit. They open on YouTube so the source remains visible.</p>
+      <div class="video-grid">${videoCards}</div>
+      <a class="video-search-link" href="${searchHref}" target="_blank" rel="noopener noreferrer">See more videos for this exact concept ↗</a>
+      <div class="stage-actions">
+        <button class="primary-button" id="continueToCheckpoint" type="button">Check if I can continue →</button>
+      </div>
+    </article>`;
+  state.unlocked = Math.max(state.unlocked, 3);
+  document.querySelector("#continueToCheckpoint").addEventListener("click", () => goToStage(3));
+  renderProgress();
+}
+
+function renderCheckpoint() {
+  const lesson = state.lesson;
+  if (state.checkpointComplete) {
+    elements.stageContainer.innerHTML = `
+      <article class="stage-card">
+        <div class="success-panel">
+          <p class="eyebrow">Concept check passed</p>
+          <h3>You can continue on your own.</h3>
+          <p>You applied <strong>${escapeHTML(lesson.concept)}</strong> to a different problem—not just the original wording.</p>
+          <div class="mastery-meter" aria-label="Concept mastery complete"><span></span></div>
+        </div>
+        <div class="stage-actions">
+          <button class="primary-button" id="newProblemButton" type="button">Tutor another problem</button>
+          <button class="secondary-button" id="reviewVisualButton" type="button">Review the drawing</button>
+        </div>
+      </article>`;
+    document.querySelector("#newProblemButton").addEventListener("click", resetApp);
+    document.querySelector("#reviewVisualButton").addEventListener("click", () => goToStage(1));
+    renderProgress();
+    return;
+  }
+
+  elements.stageContainer.innerHTML = `
+    <article class="stage-card">
+      <p class="stage-kicker"><span></span> Transfer check</p>
+      <h3 class="stage-question">Same idea. New situation.</h3>
+      <p class="stage-intro">If you can use the concept when the surface details change, you are ready to return to your assignment.</p>
+      <div class="checkpoint-card">
+        <p>${escapeHTML(lesson.checkpoint)}</p>
+        <label for="checkpointAnswer">Explain your answer</label>
+        <textarea id="checkpointAnswer" rows="4" placeholder="Show enough reasoning that your tutor can see your first step…"></textarea>
+        <div id="checkpointFeedback"></div>
+        <div class="stage-actions">
+          <button class="primary-button" id="checkAnswerButton" type="button">Check my reasoning</button>
+          <button class="secondary-button" id="hintButton" type="button">Give me one hint</button>
+        </div>
+      </div>
+    </article>`;
+  document.querySelector("#checkAnswerButton").addEventListener("click", checkCheckpoint);
+  document.querySelector("#hintButton").addEventListener("click", showHint);
+  renderProgress();
+}
+
+function showHint() {
+  const feedback = document.querySelector("#checkpointFeedback");
+  feedback.innerHTML = `<div class="feedback-box"><strong>One hint—no solution:</strong>${escapeHTML(state.lesson.answerHint)}</div>`;
+  document.querySelector("#checkpointAnswer").focus();
+}
+
+function checkCheckpoint() {
+  const input = document.querySelector("#checkpointAnswer");
+  const answer = input.value.trim();
+  const feedback = document.querySelector("#checkpointFeedback");
+  if (answer.length < 4) {
+    feedback.innerHTML = `<div class="feedback-box warn"><strong>Add your reasoning.</strong>A short attempt gives the tutor something useful to respond to.</div>`;
+    input.focus();
+    return;
+  }
+  state.attempts += 1;
+  if (state.lesson.validate(answer)) {
+    state.checkpointComplete = true;
+    markLatestHistoryComplete();
+    renderCheckpoint();
+    return;
+  }
+  const reveal = state.attempts >= 2 ? `<br><strong>Target:</strong> ${escapeHTML(state.lesson.expected)}` : "";
+  feedback.innerHTML = `<div class="feedback-box warn"><strong>Not quite yet.</strong>${escapeHTML(state.lesson.answerHint)}${reveal}</div>`;
+  input.focus();
+}
+
+function markLatestHistoryComplete() {
+  try {
+    const history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
+    if (history.length) history[0].complete = true;
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  } catch {
+    // Storage is an enhancement, not a dependency.
+  }
+}
+
+function goToStage(step) {
+  if (step > state.unlocked) return;
+  state.stage = step;
+  renderStage();
+  elements.stageContainer.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function resetApp() {
+  state.lesson = null;
+  elements.lessonTutor.hidden = true;
+  elements.emptyTutor.hidden = false;
+  elements.problemInput.value = "";
+  elements.imageInput.value = "";
+  elements.imagePreview.hidden = true;
+  elements.uploadNote.hidden = true;
+  updateCharacterCount();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+elements.settingsButton.addEventListener("click", () => {
+  syncPreferencesForm();
+  elements.dialog.showModal();
+});
+
+document.querySelector("#closeDialogButton").addEventListener("click", () => elements.dialog.close());
+
+elements.preferencesForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  savePreferences();
+  elements.dialog.close();
+  if (state.lesson && state.stage === 1) renderStage();
+});
+
+elements.problemInput.addEventListener("input", updateCharacterCount);
+elements.clearButton.addEventListener("click", resetApp);
+elements.analyzeButton.addEventListener("click", startLesson);
+
+elements.imageInput.addEventListener("change", () => {
+  const file = elements.imageInput.files?.[0];
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    elements.formError.textContent = "Please choose an image file.";
+    elements.formError.hidden = false;
+    return;
+  }
+  if (file.size > 8 * 1024 * 1024) {
+    elements.formError.textContent = "Please choose an image smaller than 8 MB.";
+    elements.formError.hidden = false;
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    elements.imagePreview.src = reader.result;
+    elements.imagePreview.hidden = false;
+    elements.uploadNote.hidden = false;
+    elements.formError.hidden = true;
+  };
+  reader.readAsDataURL(file);
+});
+
+document.querySelectorAll(".sample-chip").forEach((button) => {
+  button.addEventListener("click", () => setSample(button.dataset.sample));
+});
+
+document.querySelectorAll(".progress-step").forEach((button) => {
+  button.addEventListener("click", () => goToStage(Number(button.dataset.step)));
+});
+
+syncPreferencesForm();
+applyPreferences();
+setSample("accounting");
+
+try {
+  if (!localStorage.getItem(STORAGE_KEY)) window.setTimeout(() => elements.dialog.showModal(), 350);
+} catch {
+  // Some private browser modes disable storage; the default teaching setup still works.
+}
+
+</script>
+  </body>
+</html>
