@@ -9,6 +9,11 @@ export interface WhiteboardHandle {
   /** Skip the rest of the current animation (used when the student interrupts). */
   finishNow(): void;
   reset(): void;
+  /** Resolves once everything queued so far has been drawn. */
+  whenIdle(): Promise<void>;
+  /** The board (with the student's ink) as a JPEG data URL, for Claude to look at. */
+  snapshot(): Promise<string | null>;
+  clearInk(): void;
 }
 
 interface Props {
@@ -16,7 +21,12 @@ interface Props {
   speed: number;
   onBusyChange?: (busy: boolean) => void;
   empty?: React.ReactNode;
+  /** Student pen mode: pointer draws green ink on the board. */
+  penMode?: boolean;
+  onInkChange?: (strokes: number) => void;
 }
+
+const INK_COLOR = "#12a150";
 
 const TRAVEL_MS = 150;
 
@@ -151,7 +161,7 @@ function Marker({ tip, erasing }: { tip: Pt; erasing: boolean }) {
   );
 }
 
-const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ height, speed, onBusyChange, empty }, ref) {
+const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ height, speed, onBusyChange, empty, penMode = false, onInkChange }, ref) {
   const [done, setDone] = useState<Prim[]>([]);
   const [active, setActive] = useState<{ prim: Prim; t: number; tip: Pt } | null>(null);
   const queue = useRef<Prim[]>([]);
@@ -163,7 +173,13 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
   const onBusyRef = useRef(onBusyChange);
   const scroller = useRef<HTMLDivElement>(null);
   const syncRef = useRef<number | null>(null);
-  speedRef.current = speed;
+  const idleWaiters = useRef<(() => void)[]>([]);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [ink, setInk] = useState<Pt[][]>([]);
+  const drawing = useRef<Pt[] | null>(null);
+  const onInkRef = useRef(onInkChange);
+  onInkRef.current = onInkChange;
+  speedRef.current = speed || 1;
   onBusyRef.current = onBusyChange;
 
   const setBusy = (b: boolean) => {
@@ -171,6 +187,46 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
       busyRef.current = b;
       onBusyRef.current?.(b);
     }
+    if (!b) {
+      const w = idleWaiters.current;
+      idleWaiters.current = [];
+      w.forEach((fn) => fn());
+    }
+  };
+
+  // ---- student ink ----
+  const toBoard = (e: React.PointerEvent): Pt | null => {
+    const svg = svgRef.current;
+    const m = svg?.getScreenCTM();
+    if (!svg || !m) return null;
+    const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse());
+    return [pt.x, pt.y];
+  };
+  const onPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!penMode) return;
+    const p = toBoard(e);
+    if (!p) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drawing.current = [p];
+    setInk((s) => [...s, [p]]);
+  };
+  const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!penMode || !drawing.current) return;
+    const p = toBoard(e);
+    if (!p) return;
+    const last = drawing.current[drawing.current.length - 1];
+    if (Math.hypot(p[0] - last[0], p[1] - last[1]) < 2) return;
+    drawing.current.push(p);
+    const stroke = [...drawing.current];
+    setInk((s) => [...s.slice(0, -1), stroke]);
+  };
+  const onPointerUp = () => {
+    if (!drawing.current) return;
+    drawing.current = null;
+    setInk((s) => {
+      onInkRef.current?.(s.length);
+      return s;
+    });
   };
 
   const follow = (tip: Pt) => {
@@ -248,6 +304,53 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
       });
       setBusy(false);
     },
+    whenIdle() {
+      if (!busyRef.current && !queue.current.length && !cur.current) return Promise.resolve();
+      return new Promise<void>((resolve) => idleWaiters.current.push(resolve));
+    },
+    clearInk() {
+      setInk([]);
+      onInkRef.current?.(0);
+    },
+    async snapshot() {
+      const svg = svgRef.current;
+      if (!svg) return null;
+      const clone = svg.cloneNode(true) as SVGSVGElement;
+      clone.querySelectorAll(".wb-marker").forEach((n) => n.remove());
+      clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      clone.setAttribute("width", String(BOARD_W));
+      clone.setAttribute("height", String(height));
+      clone.removeAttribute("style");
+      const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      bg.setAttribute("width", "100%");
+      bg.setAttribute("height", "100%");
+      bg.setAttribute("fill", "#ffffff");
+      clone.insertBefore(bg, clone.firstChild);
+      const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
+      style.textContent = "text{font-family:'Patrick Hand','Comic Sans MS',cursive}";
+      clone.insertBefore(style, clone.firstChild);
+      const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(clone));
+      try {
+        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const i = new Image();
+          i.onload = () => resolve(i);
+          i.onerror = reject;
+          i.src = url;
+        });
+        const maxH = 1600;
+        const scale = Math.min(1, maxH / height);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(BOARD_W * scale);
+        canvas.height = Math.round(height * scale);
+        const ctx = canvas.getContext("2d")!;
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL("image/jpeg", 0.82);
+      } catch {
+        return null;
+      }
+    },
     reset() {
       if (raf.current) cancelAnimationFrame(raf.current);
       raf.current = 0;
@@ -257,7 +360,7 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
       setDone([]);
       setBusy(false);
     },
-  }));
+  }), [height]);
 
   useEffect(() => () => cancelAnimationFrame(raf.current), []);
 
@@ -265,15 +368,31 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
   const isEmpty = !done.length && !active;
 
   return (
-    <div className="wb-scroller" ref={scroller}>
-      <svg className="wb-svg" style={{ aspectRatio: `${BOARD_W} / ${height}` }} viewBox={`0 0 ${BOARD_W} ${height}`} preserveAspectRatio="xMidYMin meet" role="img" aria-label="Whiteboard">
+    <div className={`wb-scroller ${penMode ? "wb-scroller--pen" : ""}`} ref={scroller}>
+      <svg
+        ref={svgRef}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        className="wb-svg"
+        style={{ aspectRatio: `${BOARD_W} / ${height}`, touchAction: penMode ? "none" : undefined }} viewBox={`0 0 ${BOARD_W} ${height}`} preserveAspectRatio="xMidYMin meet" role="img" aria-label="Whiteboard">
         <g style={{ opacity: 1 - clearing }}>
           <DoneLayer prims={done} />
         </g>
         {active && active.prim.kind !== "clear" && <PrimView p={active.prim} t={active.t} />}
+        <g className="wb-ink">
+          {ink.map((st, i) =>
+            st.length === 1 ? (
+              <circle key={i} cx={st[0][0]} cy={st[0][1]} r={2.6} fill={INK_COLOR} />
+            ) : (
+              <path key={i} d={toD([st])} stroke={INK_COLOR} strokeWidth={4} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            ),
+          )}
+        </g>
         {active && <Marker tip={active.tip} erasing={active.prim.kind === "clear"} />}
       </svg>
-      {isEmpty && empty && <div className="wb-empty">{empty}</div>}
+      {isEmpty && !ink.length && empty && <div className="wb-empty">{empty}</div>}
     </div>
   );
 });

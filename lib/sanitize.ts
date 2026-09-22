@@ -15,7 +15,14 @@ export function normalizeTurn(raw: unknown): TutorTurn {
     .filter((b): b is BoardAction => !!b && typeof b === "object" && typeof (b as BoardAction).type === "string")
     .slice(0, 40);
   return {
-    say: s(r.say, 900) || "Let's keep going.",
+    say:
+      s(r.say, 900) ||
+      board
+        .filter((a) => a.type === "narrate" && typeof a.text === "string")
+        .map((a) => String(a.text).trim())
+        .join(" ")
+        .slice(0, 900) ||
+      "Let's keep going.",
     phase,
     board,
     question: s(r.question, 400),

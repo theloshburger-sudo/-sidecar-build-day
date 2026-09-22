@@ -26,10 +26,12 @@ const numberLineTurn = {
 
 const turns = process.env.MOCK_NUMBERLINE === "1" ? [numberLineTurn] : [
   {
-    say: "Hi! Let's look at this parabola together. Quick question first.",
+    say: "",
     phase: "diagnose",
     board: [
+      { type: "narrate", text: "Hi! Here's the parabola we're working with." },
       { type: "write", id: "eq", text: "y = x² − 4x + 1", zone: "left", size: "lg", color: "ink" },
+      { type: "narrate", text: "Let me sketch it on a graph so we can see its shape." },
       { type: "graph", id: "g1", zone: "right", xMin: -2, xMax: 6, yMin: -4, yMax: 6, xLabel: "x", yLabel: "y", text: "" },
       { type: "plot", target: "g1", fn: "x^2-4x+1", items: [], text: "y", color: "blue" },
     ],
@@ -69,6 +71,26 @@ createServer((req, res) => {
       ? { assignmentName: "Homework 5", problems: [{ title: "1. Solve 5x − 4 = 21", text: "1. Solve 5x − 4 = 21", subject: "Algebra" }] }
       : turns[Math.min(turnNo++, turns.length - 1)];
     const text = hasFormat ? JSON.stringify(payload) : "```json\n" + JSON.stringify(payload) + "\n```";
+    if (log) appendFileSync(log, JSON.stringify({ stream: Boolean(json.stream), image: JSON.stringify(json.messages ?? []).includes('"type":"image"'), cached: JSON.stringify(json.system ?? "").includes("cache_control") }) + "\n");
+    if (json.stream) {
+      res.writeHead(200, { "content-type": "text/event-stream" });
+      const ev = (type, data) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`);
+      ev("message_start", { message: { id: "msg_mock", type: "message", role: "assistant", content: [], model: json.model, stop_reason: null, stop_sequence: null, usage: { input_tokens: 10, output_tokens: 1 } } });
+      ev("content_block_start", { index: 0, content_block: { type: "text", text: "" } });
+      const parts = text.match(/[\s\S]{1,40}/g) ?? [];
+      let i = 0;
+      const tick = () => {
+        if (i < parts.length) {
+          ev("content_block_delta", { index: 0, delta: { type: "text_delta", text: parts[i++] } });
+          return setTimeout(tick, 30);
+        }
+        ev("content_block_stop", { index: 0 });
+        ev("message_delta", { delta: { stop_reason: "end_turn", stop_sequence: null }, usage: { output_tokens: 10 } });
+        ev("message_stop", {});
+        res.end();
+      };
+      return setTimeout(tick, 300);
+    }
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({
       id: "msg_mock", type: "message", role: "assistant", model: json.model,

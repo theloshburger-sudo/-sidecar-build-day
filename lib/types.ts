@@ -24,6 +24,7 @@ export type BoardActionType =
   | "tAccount"
   | "timeline"
   | "numberLine"
+  | "narrate"
   | "askQuestion"
   | "clear";
 
@@ -101,8 +102,10 @@ export interface Preferences {
   voice: boolean;
   focus: boolean;
   pace: "normal" | "slow";
-  /** Drawing speed multiplier: 0.5, 1, 1.5 or 2. */
+  /** Drawing speed multiplier (0.25–2), or 0 for "Auto": paced to match the voice. */
   speed: number;
+  /** Voice speed multiplier (0.75–1.5). */
+  voiceSpeed: number;
 }
 
 export interface Problem {
@@ -130,4 +133,6 @@ export interface TutorRequest {
   /** Compact description of what's currently drawn, so Claude can reference ids. */
   boardSummary: string;
   studentMessage: string;
+  /** JPEG data URL of the whiteboard when the student drew on it. */
+  image?: string;
 }
