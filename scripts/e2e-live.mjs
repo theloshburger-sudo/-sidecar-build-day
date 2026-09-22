@@ -1,0 +1,25 @@
+// Drives a live-AI session (against the real API or scripts/mock-anthropic.mjs).
+import { chromium } from "playwright";
+const OUT = process.argv[2] || ".";
+const BASE = process.env.BASE_URL || "http://localhost:3000";
+const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" }).catch(() => chromium.launch());
+const page = await browser.newPage({ viewport: { width: 1360, height: 880 } });
+const errors = [];
+page.on("pageerror", (e) => errors.push(e.message));
+await page.goto(BASE);
+await page.getByRole("button", { name: /Paste a problem/ }).click();
+await page.fill(".paste textarea", "Find the vertex of y = x² − 4x + 1");
+await page.getByRole("button", { name: /Use these problems/ }).click();
+await page.getByRole("button", { name: /Start with Teacher/ }).click();
+await page.waitForSelector(".choice", { timeout: 60000 });
+await page.waitForTimeout(3500);
+await page.screenshot({ path: `${OUT}/l1-live.png` });
+console.log("turn 1:", (await page.locator(".caption").innerText()).slice(0, 80));
+await page.locator(".choice").first().click();
+await page.waitForFunction(() => document.querySelectorAll(".msg--tutor").length >= 2, null, { timeout: 60000 });
+await page.waitForTimeout(3500);
+await page.screenshot({ path: `${OUT}/l2-live.png` });
+console.log("turn 2:", (await page.locator(".caption").innerText()).slice(0, 80));
+console.log("plan steps:", await page.locator(".plan li").count(), "| videos:", await page.locator(".video").count(), "| status:", await page.locator(".pill").innerText());
+console.log("page errors:", errors.length ? errors : "none");
+await browser.close();
