@@ -88,3 +88,25 @@ test("match ignores spacing and dash style", async () => {
   const s1 = applyActions(emptyBoard(), [{ type: "write", id: "eq", text: "y = x² − 4x + 1" }]).state;
   assert.equal(applyActions(s1, [{ type: "circle", target: "eq", match: "−4x", text: "b = −4" }]).prims.length, 2);
 });
+
+test("numberLine parses intervals and inequalities", async () => {
+  const { parseInterval } = await import("../lib/board");
+  assert.deepEqual(parseInterval("I: (0, 3]"), { name: "I", lo: 0, hi: 3, loClosed: false, hiClosed: true });
+  assert.deepEqual(parseInterval("[−3, ∞)"), { name: "", lo: -3, hi: Infinity, loClosed: true, hiClosed: false });
+  assert.equal(parseInterval("x ≥ 4")?.lo, 4);
+  assert.equal(parseInterval("nonsense"), null);
+  const r = applyActions(emptyBoard(), [{ type: "numberLine", id: "nl", items: ["I: (0, 3]", "J: (-3, 2)"], text: "Number line" }]);
+  assert.ok(r.state.els.nl && r.state.els["nl.1"]);
+});
+
+test("point labels on the same spot don't overlap", () => {
+  const r = applyActions(emptyBoard(), [
+    { type: "graph", id: "g", xMin: -4, xMax: 4, yMin: -1, yMax: 1 },
+    { type: "point", target: "g", x: 0, y: 0, text: "0 (open)" },
+    { type: "point", target: "g", x: 0.3, y: 0, text: "3 (closed)" },
+  ]);
+  const labels = r.prims.filter((p) => p.kind === "text" && /open|closed/.test(p.text)) as { x: number; y: number; w: number }[];
+  const [a, b] = labels;
+  const overlap = a.x < b.x + b.w && a.x + a.w > b.x && Math.abs(a.y - b.y) < 20;
+  assert.ok(!overlap);
+});

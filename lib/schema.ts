@@ -32,6 +32,7 @@ export const boardActionSchema = {
     variant("table", { id: str, headers: strArr, rows: { type: "array", items: strArr }, zone }),
     variant("tAccount", { id: str, text: str, debits: strArr, credits: strArr }),
     variant("timeline", { id: str, text: str, items: strArr }),
+    variant("numberLine", { id: str, zone, xMin: num, xMax: num, text: str, items: strArr }),
     variant("clear", {}),
   ],
 } as const;

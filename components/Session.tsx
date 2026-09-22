@@ -21,6 +21,8 @@ const PHASES: { id: Phase; label: string }[] = [
   { id: "wrapup", label: "Done" },
 ];
 
+const SPEEDS = [0.5, 1, 1.5, 2];
+
 const QUICK = ["Why?", "Show it differently", "Slow down", "Give me an example"];
 
 function makeMeasure(): Measure {
@@ -342,14 +344,14 @@ export default function Session({
             {prefs.voice ? "🔊 Voice" : "🔈 Voice"}
           </button>
         )}
-        <button
-          className={`chip ${prefs.pace === "slow" ? "chip--on" : ""}`}
-          onClick={() => setPrefs({ pace: prefs.pace === "slow" ? "normal" : "slow" })}
-          aria-pressed={prefs.pace === "slow"}
-          title="Slower drawing and smaller steps"
-        >
-          🐢 Slower
-        </button>
+        <div className="speed" role="group" aria-label="Drawing speed" title="How fast Teacher draws">
+          <span aria-hidden>✏️</span>
+          {SPEEDS.map((v) => (
+            <button key={v} className={prefs.speed === v ? "is-on" : ""} onClick={() => setPrefs({ speed: v })} aria-pressed={prefs.speed === v}>
+              {v}×
+            </button>
+          ))}
+        </div>
         <button className="chip" onClick={onBack}>
           ↩ Other problems
         </button>
@@ -450,7 +452,7 @@ export default function Session({
             <Whiteboard
               ref={wb}
               height={boardH}
-              speed={prefs.pace === "slow" ? 0.6 : 1}
+              speed={prefs.speed || 1}
               onBusyChange={setBoardBusy}
               empty={
                 <div className="wb-empty-inner">

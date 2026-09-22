@@ -14,7 +14,7 @@ export interface AppStatus {
 
 export type Engine = "live" | "demo";
 
-const DEFAULT_PREFS: Preferences = { format: "visual", voice: false, focus: false, pace: "normal" };
+const DEFAULT_PREFS: Preferences = { format: "visual", voice: false, focus: false, pace: "normal", speed: 1 };
 const PREFS_KEY = "sidecar.prefs.v1";
 
 function loadPrefs(): Preferences {

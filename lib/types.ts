@@ -23,6 +23,7 @@ export type BoardActionType =
   | "table"
   | "tAccount"
   | "timeline"
+  | "numberLine"
   | "askQuestion"
   | "clear";
 
@@ -100,6 +101,8 @@ export interface Preferences {
   voice: boolean;
   focus: boolean;
   pace: "normal" | "slow";
+  /** Drawing speed multiplier: 0.5, 1, 1.5 or 2. */
+  speed: number;
 }
 
 export interface Problem {

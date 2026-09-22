@@ -10,7 +10,21 @@ const REJECT_SCHEMA_ONCE = process.env.MOCK_REJECT_SCHEMA === "1";
 let rejected = false;
 let turnNo = 0;
 
-const turns = [
+const numberLineTurn = {
+  say: "Hey! Let's map I and J on a number line first.",
+  phase: "diagnose",
+  board: [
+    { type: "write", id: "i", text: "I = (0, 3]", zone: "left", size: "lg", color: "blue" },
+    { type: "write", id: "j", text: "J = (−3, 2)", zone: "left", size: "lg", color: "orange" },
+    { type: "numberLine", id: "nl", zone: "full", xMin: -4, xMax: 4, text: "Number line", items: ["I: (0, 3]", "J: (−3, 2)"] },
+    { type: "circle", target: "i", match: "(", text: "open: 0 not in I", color: "red" },
+  ],
+  question: "On the number line, does I include the point 0 or not?",
+  choices: ["Yes, 0 is included in I", "No, 0 is NOT included in I", "Not sure what the brackets mean"],
+  gap: "", plan: [], step: 0, videos: [], practice: "", verdict: "none",
+};
+
+const turns = process.env.MOCK_NUMBERLINE === "1" ? [numberLineTurn] : [
   {
     say: "Hi! Let's look at this parabola together. Quick question first.",
     phase: "diagnose",
@@ -36,6 +50,7 @@ const turns = [
     videos: [{ title: "Vertex of a parabola", query: "find vertex of parabola -b/2a" }], practice: "", verdict: "correct",
   },
 ];
+if (process.env.MOCK_NUMBERLINE === "1") turns.length = 1;
 
 createServer((req, res) => {
   let body = "";

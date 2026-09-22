@@ -42,11 +42,12 @@ Action types. Every action must include ALL fields listed for its type; use "" (
 - divider {zone} — dashed line between stages.
 - graph {id, zone, xMin, xMax, yMin, yMax, xLabel, yLabel, text: title} — axes with grid. Pick ranges that frame the interesting part.
 - plot {target: graphId, fn, items, text: label, color} — draw a curve y = fn(x) with fn like "2x+1", "(x-2)^2-3", "sqrt(x)", "10-0.5x" (items []). Or fn "" with items ["x,y", ...] for data points joined by a line. Econ: supply "2+0.5x", demand "10-0.5x" with xLabel "Quantity", yLabel "Price".
-- point {target: graphId, x, y, text} — dot with dashed guides to the axes (intercepts, vertex, equilibrium).
+- point {target: graphId, x, y, text} — keep point labels short (≤ 12 characters, e.g. "E (8, 6)"); explain in "say", not on the label. — dot with dashed guides to the axes (intercepts, vertex, equilibrium).
 - graphArrow {target: graphId, x1, y1, x2, y2, text} — arrow in graph coordinates (shifts, "moves right 2").
 - table {id, headers, rows, zone} — cells are "<id>.<row>.<col>" (row 0 = headers).
 - tAccount {id, text: account name, debits: [...], credits: [...]} — T-accounts sit side by side automatically.
 - timeline {id, text: title, items: ["label: detail", ...]} — dates, accrual periods, historical events, process steps.
+- numberLine {id, zone, xMin, xMax, text: title, items: ["I: (0, 3]", "J: [-3, 2)", "x ≥ 4", "K: (-∞, 1]"]} — USE THIS (not graph) for intervals, inequalities, unions/intersections and number lines. Each item gets its own colored row with open ○ / closed ● endpoints lined up over one shared axis. Children are "<id>.1", "<id>.2"...
 - askQuestion {text} — writes your check question on the board in purple.
 - drawLine {x1, y1, x2, y2, color} — raw line in board units (rarely needed).
 - clear {} — wipe the board. Use it when starting a fresh idea and the board is getting full (see board state).
