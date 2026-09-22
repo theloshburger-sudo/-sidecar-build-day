@@ -4,7 +4,8 @@ import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useRef, 
 import { BOARD_W, pointAt, toD, type Prim, type Pt } from "@/lib/board";
 
 export interface WhiteboardHandle {
-  enqueue(prims: Prim[]): void;
+  /** Queue strokes. With `syncMs`, the batch is paced to finish in about that long (to match speech). */
+  enqueue(prims: Prim[], syncMs?: number): void;
   /** Skip the rest of the current animation (used when the student interrupts). */
   finishNow(): void;
   reset(): void;
@@ -161,6 +162,7 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
   const busyRef = useRef(false);
   const onBusyRef = useRef(onBusyChange);
   const scroller = useRef<HTMLDivElement>(null);
+  const syncRef = useRef<number | null>(null);
   speedRef.current = speed;
   onBusyRef.current = onBusyChange;
 
@@ -189,10 +191,10 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
         raf.current = 0;
         return;
       }
-      cur.current = { prim: next, start: now + TRAVEL_MS / speedRef.current, from: lastTip.current };
+      cur.current = { prim: next, start: now + TRAVEL_MS / (syncRef.current ?? speedRef.current), from: lastTip.current };
     }
     const { prim, start, from } = cur.current;
-    const spd = speedRef.current;
+    const spd = syncRef.current ?? speedRef.current;
     if (now < start) {
       // Marker travels to where the next stroke begins.
       const k = 1 - (start - now) / (TRAVEL_MS / spd);
@@ -218,8 +220,14 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
   }, []);
 
   useImperativeHandle(ref, () => ({
-    enqueue(prims) {
+    enqueue(prims, syncMs) {
       if (!prims.length) return;
+      if (syncMs && syncMs > 0) {
+        const natural = prims.reduce((acc, p) => acc + p.dur + TRAVEL_MS, 0);
+        syncRef.current = Math.min(3, Math.max(0.35, natural / syncMs));
+      } else {
+        syncRef.current = null;
+      }
       queue.current.push(...prims);
       if (!raf.current) {
         setBusy(true);

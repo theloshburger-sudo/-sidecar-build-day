@@ -10,6 +10,8 @@ export interface AppStatus {
   live: boolean;
   model: string;
   videos: boolean;
+  /** Natural (ElevenLabs) voice available. */
+  voice?: boolean;
 }
 
 export type Engine = "live" | "demo";
@@ -39,7 +41,7 @@ export default function SidecarApp() {
     fetch("/api/status")
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((s: AppStatus) => setStatus(s))
-      .catch(() => setStatus({ live: false, model: "", videos: false }));
+      .catch(() => setStatus({ live: false, model: "", videos: false, voice: false }));
   }, []);
 
   const setPrefs = useCallback((p: Partial<Preferences>) => {

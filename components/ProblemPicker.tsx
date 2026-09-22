@@ -117,14 +117,14 @@ export default function ProblemPicker({
               <input type="checkbox" checked={prefs.pace === "slow"} onChange={(e) => setPrefs({ pace: e.target.checked ? "slow" : "normal" })} />
               <span>
                 <strong>Extra-small steps</strong>
-                <small>Slower drawing, simpler pieces</small>
+                <small>Teacher breaks ideas into tinier pieces</small>
               </span>
             </label>
             <label className="toggle">
               <input type="checkbox" checked={prefs.voice} onChange={(e) => setPrefs({ voice: e.target.checked })} />
               <span>
                 <strong>Teacher talks out loud</strong>
-                <small>Uses your browser&apos;s voice</small>
+                <small>{status?.voice ? "Natural AI voice, synced with the drawing" : "Synced with the drawing"}</small>
               </span>
             </label>
             <label className="toggle">
