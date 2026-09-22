@@ -120,31 +120,31 @@ const DoneLayer = memo(function DoneLayer({ prims }: { prims: Prim[] }) {
   );
 });
 
-/** The little marker Teacher draws with, with a tiny cloud riding on the cap. */
+/** Teacher's glowing stylus, with a mini Teacher riding along. */
 function Marker({ tip, erasing }: { tip: Pt; erasing: boolean }) {
   return (
     <g transform={`translate(${tip[0]} ${tip[1]})`} className="wb-marker">
       <g transform="rotate(-38)">
         {erasing ? (
           <g>
-            <rect x="-10" y="-60" width="46" height="26" rx="6" fill="#8fa3c2" />
-            <rect x="-10" y="-40" width="46" height="10" rx="3" fill="#e9eef7" />
+            <rect x="-10" y="-60" width="46" height="26" rx="13" fill="#f4f7fb" stroke="#c3cee0" strokeWidth="1.5" />
+            <rect x="-4" y="-38" width="34" height="4" rx="2" fill="#4fc3ff" opacity="0.8" />
           </g>
         ) : (
           <g>
-            <path d="M0 0 L7 -12 L-7 -12 Z" fill="#2f5bd3" />
-            <rect x="-9" y="-62" width="18" height="50" rx="4" fill="#2f5bd3" />
-            <rect x="-9" y="-38" width="18" height="8" fill="#ffffff" opacity="0.7" />
-            <rect x="-10" y="-74" width="20" height="15" rx="4" fill="#1d3f9e" />
+            <circle r="6" fill="#4fc3ff" opacity="0.35" />
+            <path d="M0 0 L5 -11 L-5 -11 Z" fill="#4fc3ff" />
+            <rect x="-7" y="-62" width="14" height="52" rx="7" fill="#f7f9fc" stroke="#c3cee0" strokeWidth="1.5" />
+            <rect x="-7" y="-24" width="14" height="3" fill="#4fc3ff" opacity="0.85" />
           </g>
         )}
       </g>
       {/* mini Teacher */}
-      <g transform="translate(18 -92) scale(0.42)">
-        <path d="M28 80h66a22 22 0 0 0 3-43.8A30 30 0 0 0 40.6 27 21 21 0 0 0 28 80z" fill="#fff" stroke="#b9cbee" strokeWidth="4" />
-        <ellipse cx="49" cy="54" rx="4" ry="5" fill="#1f2d3a" />
-        <ellipse cx="75" cy="54" rx="4" ry="5" fill="#1f2d3a" />
-        <path d="M55 64q7 6 14 0" stroke="#1f2d3a" strokeWidth="3.5" fill="none" strokeLinecap="round" />
+      <g transform="translate(14 -104) scale(0.5)">
+        <ellipse cx="50" cy="34" rx="30" ry="25" fill="#f7f9fc" stroke="#c3cee0" strokeWidth="2.5" />
+        <ellipse cx="50" cy="37" rx="23" ry="15" fill="#070a10" />
+        <path d="M35 36 q6 3 11 1 M54 37 q5 2 11 -1" stroke="#4fc3ff" strokeWidth="4" fill="none" strokeLinecap="round" />
+        <path d="M34 62 C34 56 66 56 66 62 C66 74 58 82 50 84 C42 82 34 74 34 62 Z" fill="#f7f9fc" stroke="#c3cee0" strokeWidth="2.5" />
       </g>
     </g>
   );

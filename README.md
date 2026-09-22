@@ -1,8 +1,8 @@
-# Sidecar ☁️
+# Sidecar 🤖
 
 **A private, patient AI tutor attached to the exact homework problem you're stuck on.**
 
-Upload a Canvas assignment or study guide (PDF or a phone photo), tap the one problem you're stuck on, and **Teacher**, a friendly cloud, asks one or two quick questions to find the concept you're actually missing. Then Teacher teaches only that, drawing it step by step on a live whiteboard. You can interrupt anytime ("why did we divide there?", "show that differently"). The session ends with a fresh related problem you solve on your own.
+Upload a Canvas assignment or study guide (PDF or a phone photo), tap the one problem you're stuck on, and **Teacher**, a friendly floating robot, asks one or two quick questions to find the concept you're actually missing. Then Teacher teaches only that, drawing it step by step on a live whiteboard. You can interrupt anytime ("why did we divide there?", "show that differently"). The session ends with a fresh related problem you solve on your own.
 
 > Built for Build Day #1. The brief is in [`docs/BUILD_DAY_BRIEF.md`](docs/BUILD_DAY_BRIEF.md).
 
@@ -15,7 +15,7 @@ Upload a Canvas assignment or study guide (PDF or a phone photo), tap the one pr
 | **Upload anything** | Text PDFs are read in the browser with pdf.js. Scanned PDFs and photos are read by Claude's vision. You can also paste text. |
 | **Pick one problem** | The assignment is split into individual problems, and you choose exactly one. |
 | **Find the gap** | 1–2 diagnostic questions (tap or type) to find the missing concept. The tutor doesn't reteach the whole chapter. |
-| **Live whiteboard** | Claude returns structured board actions (`write`, `circle`, `balance`, `graph`, `plot`, `tAccount`, `timeline`, `table`...). A layout engine positions them, and a marker (ridden by a tiny Teacher) draws them stroke by stroke. |
+| **Live whiteboard** | Claude returns structured board actions (`write`, `circle`, `balance`, `graph`, `plot`, `tAccount`, `timeline`, `table`...). A layout engine positions them, and a marker (carried by a mini Teacher) draws them stroke by stroke. |
 | **Interrupt anytime** | Type, use the mic, or tap *Why? / Show it differently / Slow down / Give me an example*. Drawing stops, and Teacher answers that exact question and then checks understanding. |
 | **Never just the answer** | Teacher teaches the next idea and makes you do the step. The session ends with a *different* related problem that gets graded. |
 | **Focus Mode** | Shows only the board, the current question and a progress meter. |

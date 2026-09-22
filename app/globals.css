@@ -1,14 +1,14 @@
 :root {
-  --bg: #eef3fa;
+  --bg: #eef2f7;
   --bg-2: #f7f9fd;
   --ink: #1f2d3a;
   --muted: #66788a;
-  --line: #dfe7f1;
+  --line: #dde5ef;
   --card: #ffffff;
   --soft: #f3f6fc;
-  --primary: #2f5bd3;
-  --primary-2: #4a74e6;
-  --primary-soft: #e8eefc;
+  --primary: #1677e8;
+  --primary-2: #3fb1ff;
+  --primary-soft: #e6f3ff;
   --ok: #17936a;
   --ok-soft: #e3f5ee;
   --warn: #c7700f;
@@ -16,8 +16,8 @@
   --bad: #d4472f;
   --bad-soft: #fdecea;
   --purple: #7a5af0;
-  --radius: 18px;
-  --shadow: 0 1px 2px rgba(31, 45, 58, 0.04), 0 10px 30px rgba(47, 91, 211, 0.07);
+  --radius: 22px;
+  --shadow: 0 1px 2px rgba(31, 45, 58, 0.04), 0 12px 34px rgba(64, 150, 255, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.9);
   --topbar: 66px;
 }
 
@@ -35,8 +35,9 @@ body {
   min-height: 100vh;
   color: var(--ink);
   background:
-    radial-gradient(1200px 500px at 85% -10%, #dfe9ff 0%, transparent 60%),
-    radial-gradient(900px 500px at -10% 10%, #e5f5ef 0%, transparent 55%),
+    radial-gradient(900px 600px at 80% -5%, #ffffff 0%, rgba(255, 255, 255, 0) 60%),
+    radial-gradient(700px 500px at 88% 0%, rgba(120, 190, 255, 0.28) 0%, transparent 65%),
+    radial-gradient(800px 500px at -10% 30%, rgba(170, 200, 255, 0.25) 0%, transparent 60%),
     var(--bg);
   font-family: var(--font-ui), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -1052,8 +1053,9 @@ h3 {
   flex-direction: column;
   border-radius: 22px;
   padding: 10px;
-  background: linear-gradient(145deg, #dfe5ee, #c9d2df);
-  box-shadow: 0 18px 40px rgba(31, 45, 58, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  background: linear-gradient(160deg, #ffffff, #e3e9f2 55%, #d3dcea);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 22px 50px rgba(40, 110, 220, 0.16), 0 0 0 1px rgba(79, 195, 255, 0.15), inset 0 1px 0 #fff;
 }
 .board-head {
   display: flex;
@@ -1421,3 +1423,25 @@ h3 {
     height: 36px;
   }
 }
+
+/* ---------------------------------------------------------------- futuristic robot theme */
+.card { backdrop-filter: blur(10px); background: rgba(255, 255, 255, 0.88); }
+.btn--primary { box-shadow: 0 6px 18px rgba(22, 119, 232, 0.3), 0 0 14px rgba(79, 195, 255, 0.35); }
+.chip--on, .format--active, .problem--active { box-shadow: 0 0 0 3px rgba(79, 195, 255, 0.18), 0 0 18px rgba(79, 195, 255, 0.25); }
+.hero h1 em { font-family: inherit; font-weight: 800; background: linear-gradient(90deg, #1677e8, #4fc3ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero-bubble { font-family: inherit; font-size: 15px; font-weight: 600; border-color: rgba(79, 195, 255, 0.4); box-shadow: 0 0 20px rgba(79, 195, 255, 0.25); }
+.caption { border: 1px solid rgba(79, 195, 255, 0.25); box-shadow: 0 0 22px rgba(79, 195, 255, 0.12); }
+.phases .is-now .phase-dot { box-shadow: 0 0 0 4px var(--primary-soft), 0 0 14px rgba(79, 195, 255, 0.7); }
+.topbar { background: rgba(250, 252, 255, 0.75); }
+.bot-eyes { animation: botGlow 3.2s ease-in-out infinite; }
+.bot--talking .bot-eyes { animation: botGlow 0.5s ease-in-out infinite alternate; }
+.bot-chest { animation: botGlow 2.4s ease-in-out infinite; }
+.bot--happy .bot-arm-l { transform-origin: 28px 60px; animation: armWave 0.45s ease-in-out 4 alternate; }
+.bot--happy .cloud-body { animation: hop 0.6s ease-in-out 2; }
+.bot--talking .cloud-body { animation: float 1.8s ease-in-out infinite; }
+.bot-eye { transform-box: fill-box; transform-origin: center; animation: blink 5s infinite; }
+@keyframes armWave { to { transform: rotate(-35deg); } }
+.bot-shadow { animation: shadow 4.5s ease-in-out infinite; transform-origin: 50px 101px; }
+@keyframes botGlow { 50% { opacity: 0.55; } }
+@keyframes shadow { 50% { transform: scaleX(0.8); opacity: 0.2; } }
+@media (prefers-reduced-motion: reduce) { .bot-eyes, .bot-chest, .bot-shadow { animation: none !important; } }
