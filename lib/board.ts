@@ -80,6 +80,8 @@ export interface BoardState {
   lastGraph: string | null;
   /** Next free x for mark labels, per text line ("elId#lineIdx"). */
   annot: Record<string, number>;
+  /** Small labels already placed (graph/point labels), so new ones can dodge them. */
+  labels: Box[];
   seq: number;
 }
 
@@ -89,7 +91,7 @@ export type Measure = (text: string, size: number) => number;
 export const approxMeasure: Measure = (text, size) => text.length * size * 0.5;
 
 export function emptyBoard(): BoardState {
-  return { cursor: { left: BOARD_TOP, right: BOARD_TOP }, els: {}, order: [], row: null, lastGraph: null, annot: {}, seq: 0 };
+  return { cursor: { left: BOARD_TOP, right: BOARD_TOP }, els: {}, order: [], row: null, lastGraph: null, annot: {}, labels: [], seq: 0 };
 }
 
 export function boardHeight(s: BoardState): number {
@@ -228,6 +230,7 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
     row: prev.row ? { ...prev.row } : null,
     lastGraph: prev.lastGraph,
     annot: { ...(prev.annot ?? {}) },
+    labels: [...(prev.labels ?? [])],
     seq: prev.seq,
   };
   const prims: Prim[] = [];
@@ -328,6 +331,37 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
 
   const zoneOfBox = (b: Box): Zone => (b.x >= ZONES.right.x - 5 ? "right" : b.x + b.w > ZONES.left.x + ZONES.left.w + 5 ? "full" : "left");
 
+  /** Place a small label near point p, trying spots until it doesn't collide with earlier labels. */
+  const placeLabel = (raw: string, p: Pt, color: string, bounds: Box, bold = false) => {
+    const label = raw.length > 26 ? `${raw.slice(0, 25)}…` : raw;
+    const size = FONT.sm;
+    const w = measure(label, size);
+    const h = size * 1.1;
+    const spots: Pt[] = [
+      [p[0] + 10, p[1] - 10],
+      [p[0] + 10, p[1] + 26],
+      [p[0] - w - 10, p[1] - 10],
+      [p[0] - w - 10, p[1] + 26],
+      [p[0] + 10, p[1] - 36],
+      [p[0] - w / 2, p[1] - 36],
+      [p[0] + 10, p[1] + 52],
+      [p[0] - w / 2, p[1] + 52],
+    ];
+    const hits = (b: Box) => s.labels.some((o) => b.x < o.x + o.w && b.x + b.w > o.x && b.y < o.y + o.h && b.y + b.h > o.y);
+    let best: Box | null = null;
+    for (const [x0, y0] of spots) {
+      const x = Math.max(bounds.x, Math.min(x0, bounds.x + bounds.w - w));
+      const b = { x, y: y0 - size * 0.85, w, h };
+      if (!hits(b)) {
+        best = b;
+        break;
+      }
+      best ??= b;
+    }
+    s.labels.push(best!);
+    addText(label, best!.x, best!.y + size * 0.85, size, color, bold, true);
+  };
+
   /** Put a short label next to a mark without covering other writing. */
   const annotate = (hit: Hit, label: string, color: string) => {
     const size = FONT.sm;
@@ -372,6 +406,7 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
         s.order = [];
         s.lastGraph = null;
         s.annot = {};
+        s.labels = [];
         break;
       }
 
@@ -682,10 +717,7 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
         addPath(segs, color, 3.4);
         if (text) {
           const last = segs[segs.length - 1][segs[segs.length - 1].length - 1];
-          const tw = measure(text, FONT.sm);
-          const lx = Math.min(last[0] + 6, g.box.x + g.box.w - tw);
-          const ly = Math.max(g.plot.y + 14, Math.min(last[1] - 8, g.plot.y + g.plot.h - 6));
-          addText(text, lx, ly, FONT.sm, color, true, true);
+          placeLabel(text, [Math.min(last[0], g.box.x + g.box.w - 10), Math.max(g.plot.y + 14, Math.min(last[1], g.plot.y + g.plot.h - 6))], color, g.box, true);
         }
         break;
       }
@@ -703,9 +735,8 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
         const dot: Pt[] = [];
         for (let i = 0; i <= 16; i++) dot.push([p[0] + Math.cos((i / 16) * Math.PI * 2) * 6, p[1] + Math.sin((i / 16) * Math.PI * 2) * 6]);
         addPath([dot], color, 3, { fill: color, dur: 200 });
-        const label = text || `(${fmt(a.x!)}, ${fmt(a.y!)})`;
-        const tw = measure(label, FONT.sm);
-        addText(label, Math.min(p[0] + 10, g.box.x + g.box.w - tw), p[1] - 10, FONT.sm, color, false, true);
+        s.labels.push({ x: p[0] - 7, y: p[1] - 7, w: 14, h: 14 });
+        placeLabel(text || `(${fmt(a.x!)}, ${fmt(a.y!)})`, p, color, g.box);
         break;
       }
 
@@ -814,6 +845,71 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
         break;
       }
 
+      case "numberLine": {
+        const zone = zoneOf(a.zone, "full");
+        const z = ZONES[zone];
+        const raw = list(a.items).slice(0, 5).map(String);
+        const parsed = raw.map(parseInterval).filter((v): v is NonNullable<ReturnType<typeof parseInterval>> => !!v);
+        if (!parsed.length) break;
+        const finite = parsed.flatMap((iv) => [iv.lo, iv.hi]).filter(Number.isFinite);
+        let lo = Number.isFinite(a.xMin) ? a.xMin! : Math.min(...finite, 0) - 1;
+        let hi = Number.isFinite(a.xMax) ? a.xMax! : Math.max(...finite, 0) + 1;
+        if (hi <= lo) [lo, hi] = [lo - 5, lo + 5];
+        let top = topOf(zone) + 6;
+        if (text) {
+          addText(text, z.x, top + FONT.sm, FONT.sm, INK.ink, true);
+          top += FONT.sm * 1.6;
+        }
+        const x0 = z.x + 90;
+        const x1 = z.x + z.w - 20;
+        const X = (v: number) => x0 + ((Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo)) * (x1 - x0);
+        const rowH = 40;
+        const axisY = top + 20 + parsed.length * rowH;
+        const palette: InkColor[] = ["blue", "orange", "green", "purple", "red"];
+        const nlId = (a.id || "").trim() || `nl${s.seq + 1}`;
+        const children: string[] = [];
+        // axis + ticks
+        addPath([handLine([x0 - 30, axisY], [x1 + 8, axisY], rand, 0.5), ...arrowHead([x1 + 12, axisY], [x0, axisY], 11), ...arrowHead([x0 - 34, axisY], [x1, axisY], 11)], INK.ink, 2.6);
+        const step = niceStep(hi - lo);
+        const ticks: Pt[][] = [];
+        for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) {
+          ticks.push([[X(v), axisY - 7], [X(v), axisY + 7]]);
+          const label = fmt(v);
+          const lw = measure(label, 17);
+          prims.push({ kind: "text", key: key(), x: X(v) - lw / 2, y: axisY + 28, text: label, size: 17, color: INK.muted, w: lw, dur: 50 });
+        }
+        addPath(ticks, INK.ink, 2, { dur: 200 });
+        parsed.forEach((iv, i) => {
+          const color = INK[palette[i % palette.length]];
+          const y = top + 20 + i * rowH + rowH / 2;
+          const a0 = Number.isFinite(iv.lo) ? X(iv.lo) : x0 - 26;
+          const a1 = Number.isFinite(iv.hi) ? X(iv.hi) : x1 + 4;
+          const name = iv.name || `#${i + 1}`;
+          const nameW = addText(name, z.x, y + 7, FONT.sm, color, true);
+          const cid = register(`${nlId}.${i + 1}`, { kind: "text", text: name, lines: [{ text: name, x: z.x, y: y + 7, size: FONT.sm, start: 0 }], box: { x: z.x, y: y - 14, w: nameW, h: 24 }, label: raw[i] }, "t");
+          children.push(cid);
+          const bar: Pt[][] = [handLine([a0, y], [a1, y], rand, 0.4)];
+          if (!Number.isFinite(iv.lo)) bar.push(...arrowHead([a0 - 4, y], [a1, y], 11));
+          if (!Number.isFinite(iv.hi)) bar.push(...arrowHead([a1 + 4, y], [a0, y], 11));
+          addPath(bar, color, 6);
+          // dashed drops to the axis so endpoints line up with the numbers
+          const drops: Pt[][] = [];
+          for (const [v, xx] of [[iv.lo, a0], [iv.hi, a1]] as const) if (Number.isFinite(v)) drops.push([[xx, y + 8], [xx, axisY - 2]]);
+          if (drops.length) addPath(drops, color, 1.4, { dashed: true, dur: 150 });
+          for (const [v, xx, closed] of [[iv.lo, a0, iv.loClosed], [iv.hi, a1, iv.hiClosed]] as const) {
+            if (!Number.isFinite(v)) continue;
+            const ring: Pt[] = [];
+            for (let k = 0; k <= 16; k++) ring.push([xx + Math.cos((k / 16) * Math.PI * 2) * 7.5, y + Math.sin((k / 16) * Math.PI * 2) * 7.5]);
+            addPath([ring], color, 3, { fill: closed ? color : "#ffffff", dur: 160 });
+          }
+        });
+        const legend = "● included   ○ not included";
+        addText(legend, x1 - measure(legend, 16), axisY + 52, 16, INK.muted, false, true);
+        register(nlId, { kind: "block", box: { x: z.x, y: top, w: z.w, h: axisY + 56 - top }, children, label: `number line ${raw.join(" ; ")}` }, "nl");
+        advance(zone, axisY + 58);
+        break;
+      }
+
       case "timeline": {
         const zone = zoneOf(a.zone, "full");
         const z = ZONES[zone];
@@ -866,6 +962,33 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
   }
 
   return { state: s, prims };
+}
+
+/** Parse "I: (0, 3]", "[-2, ∞)", "x < 4" style intervals. */
+export function parseInterval(src: string): { name: string; lo: number; hi: number; loClosed: boolean; hiClosed: boolean } | null {
+  const num = (t: string) => {
+    const v = t.trim().toLowerCase().replace(/[−–]/g, "-").replace(/\s/g, "");
+    if (/^\+?(∞|inf|infinity)$/.test(v)) return Infinity;
+    if (/^-(∞|inf|infinity)$/.test(v)) return -Infinity;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : NaN;
+  };
+  const m = /^\s*(?:([^:]{1,20}):\s*)?([([])\s*([^,]+?)\s*,\s*([^)\]]+?)\s*([)\]])\s*$/.exec(src);
+  if (m) {
+    const lo = num(m[3]);
+    const hi = num(m[4]);
+    if (Number.isNaN(lo) || Number.isNaN(hi)) return null;
+    return { name: (m[1] ?? "").trim(), lo, hi, loClosed: m[2] === "[" && Number.isFinite(lo), hiClosed: m[5] === "]" && Number.isFinite(hi) };
+  }
+  const ineq = /^\s*(?:([^:]{1,20}):\s*)?[a-z]\s*(<=|>=|≤|≥|<|>)\s*(-?[\d.]+)\s*$/i.exec(src.replace(/[−–]/g, "-"));
+  if (ineq) {
+    const v = Number(ineq[3]);
+    const op = ineq[2];
+    const name = (ineq[1] ?? "").trim();
+    if (op === "<" || op === "<=" || op === "≤") return { name, lo: -Infinity, hi: v, loClosed: false, hiClosed: op !== "<" };
+    return { name, lo: v, hi: Infinity, loClosed: op !== ">", hiClosed: false };
+  }
+  return null;
 }
 
 function niceStep(range: number): number {

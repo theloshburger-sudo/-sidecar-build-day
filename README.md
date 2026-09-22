@@ -20,7 +20,8 @@ Upload a Canvas assignment or study guide (PDF or a phone photo), tap the one pr
 | **Never just the answer** | Teacher teaches the next idea and makes you do the step. The session ends with a *different* related problem that gets graded. |
 | **Focus Mode** | Shows only the board, the current question and a progress meter. |
 | **Your pace, your format** | You pick a starting format (draw it / worked example / analogy / questions). These aren't treated as fixed "learning styles", and Teacher adapts from what you ask. There's also an extra-small-steps mode. |
-| **Voice** | Browser text-to-speech and speech recognition. This is optional: every control also works with text. |
+| **Voice, synced to the board** | Teacher talks with a natural ElevenLabs voice, or the best browser voice as a fallback. Drawing starts when the voice starts and is paced to finish with it. Speech recognition lets you talk back. Voice is optional: every control also works with text. |
+| **Drawing speed** | 0.5× / 1× / 1.5× / 2× in the top bar. With voice on, it also sets how fast Teacher talks. |
 | **Videos, only when useful** | 1–2 targeted YouTube suggestions, shown as real video cards if a YouTube key is set and as search links otherwise. |
 | **Offline demo mode** | Four fully scripted lessons (Algebra, Accounting, Chemistry, Economics) that run with **no internet and no API key**. If live AI fails on a sample's first turn, the app switches to the script automatically. |
 | **Private** | No accounts and no database. Recent sessions are stored only in your browser (localStorage). |
@@ -46,6 +47,7 @@ Without a key the app still runs. The four sample assignments work fully offline
 | `ANTHROPIC_API_KEY` | For live tutoring | Get one at [console.anthropic.com](https://console.anthropic.com/) → **API Keys** → *Create Key*. Add a few dollars of credit under **Billing**. |
 | `ANTHROPIC_MODEL` | No | Defaults to `claude-sonnet-5`, which is fast and smart. `claude-opus-5-5` gives the highest quality but is slower. |
 | `ANTHROPIC_EFFORT` | No | `low` / `medium` (default) / `high`. `low` gives the snappiest replies. |
+| `ELEVENLABS_API_KEY` | No | A natural, human-sounding voice for Teacher. Free plan at [elevenlabs.io](https://elevenlabs.io): Profile → API Keys. Without it, Teacher uses the best voice built into the browser. `ELEVENLABS_VOICE_ID` picks a different voice. |
 | `YOUTUBE_API_KEY` | No | Real video cards instead of search links. In Google Cloud Console, enable **YouTube Data API v3**, then go to Credentials → API key. |
 
 Keys are only read on the server (in the `app/api/*` routes). They never reach the browser and are never committed. `.env*.local` is gitignored.

@@ -21,6 +21,8 @@ const PHASES: { id: Phase; label: string }[] = [
   { id: "wrapup", label: "Done" },
 ];
 
+const SPEEDS = [0.5, 1, 1.5, 2];
+
 const QUICK = ["Why?", "Show it differently", "Slow down", "Give me an example"];
 
 function makeMeasure(): Measure {
@@ -91,6 +93,10 @@ export default function Session({
   const started = useRef(false);
   const prefsRef = useRef(prefs);
   prefsRef.current = prefs;
+  const statusRef = useRef(status);
+  /** Strokes waiting for the voice to start; flushed if the student interrupts first. */
+  const pendingDraw = useRef<(() => void) | null>(null);
+  statusRef.current = status;
 
   const lastTutor = useMemo(() => {
     for (let i = history.length - 1; i >= 0; i--) {
@@ -114,7 +120,6 @@ export default function Session({
     const res = applyActions(board.current, turn.board, m);
     board.current = res.state;
     setBoardH(boardHeight(res.state));
-    wb.current?.enqueue(res.prims);
     if (turn.plan.length) setPlan(turn.plan);
     if (turn.gap) setGap(turn.gap);
     if (turn.videos.length) setVideos(turn.videos);
@@ -123,8 +128,33 @@ export default function Session({
       setHappy(true);
       setTimeout(() => setHappy(false), 2600);
     }
-    if (prefsRef.current.voice && ttsSupported()) {
-      speak(turn.say, { slow: prefsRef.current.pace === "slow", onStart: () => setSpeaking(true), onEnd: () => setSpeaking(false) });
+    if (prefsRef.current.voice) {
+      // Voice on: start drawing when the voice starts, paced so both finish together.
+      let drawn = false;
+      const draw = (ms?: number) => {
+        if (drawn) return;
+        drawn = true;
+        pendingDraw.current = null;
+        wb.current?.enqueue(res.prims, ms);
+      };
+      pendingDraw.current = () => draw();
+      const fallback = setTimeout(() => draw(), 6000);
+      speak(turn.say, {
+        rate: prefsRef.current.speed || 1,
+        natural: Boolean(statusRef.current?.voice),
+        onStart: (ms) => {
+          clearTimeout(fallback);
+          setSpeaking(true);
+          draw(ms * 0.95);
+        },
+        onEnd: () => {
+          clearTimeout(fallback);
+          setSpeaking(false);
+          draw();
+        },
+      });
+    } else {
+      wb.current?.enqueue(res.prims);
     }
   }, []);
 
@@ -227,6 +257,7 @@ export default function Session({
       if (!text || thinking) return;
       stopSpeaking();
       setSpeaking(false);
+      pendingDraw.current?.();
       wb.current?.finishNow(); // interruption: finish drawing instantly, then respond
       pushHistory({ role: "student", text });
       setInput("");
@@ -247,7 +278,8 @@ export default function Session({
       return;
     }
     stopSpeaking();
-    wb.current?.finishNow();
+    pendingDraw.current?.();
+      wb.current?.finishNow();
     let latest = "";
     const rec = createRecognizer({
       onText: (t, final) => {
@@ -282,7 +314,8 @@ export default function Session({
       if (e.key === "Escape") {
         stopSpeaking();
         setSpeaking(false);
-        wb.current?.finishNow();
+        pendingDraw.current?.();
+      wb.current?.finishNow();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -329,7 +362,7 @@ export default function Session({
         <button className={`chip ${focus ? "chip--on" : ""}`} onClick={() => setPrefs({ focus: !focus })} aria-pressed={focus}>
           🎯 Focus
         </button>
-        {ttsSupported() && (
+        {(ttsSupported() || status?.voice) && (
           <button
             className={`chip ${prefs.voice ? "chip--on" : ""}`}
             onClick={() => {
@@ -342,14 +375,14 @@ export default function Session({
             {prefs.voice ? "🔊 Voice" : "🔈 Voice"}
           </button>
         )}
-        <button
-          className={`chip ${prefs.pace === "slow" ? "chip--on" : ""}`}
-          onClick={() => setPrefs({ pace: prefs.pace === "slow" ? "normal" : "slow" })}
-          aria-pressed={prefs.pace === "slow"}
-          title="Slower drawing and smaller steps"
-        >
-          🐢 Slower
-        </button>
+        <div className="speed" role="group" aria-label="Drawing speed" title="How fast Teacher draws">
+          <span aria-hidden>✏️</span>
+          {SPEEDS.map((v) => (
+            <button key={v} className={prefs.speed === v ? "is-on" : ""} onClick={() => setPrefs({ speed: v })} aria-pressed={prefs.speed === v}>
+              {v}×
+            </button>
+          ))}
+        </div>
         <button className="chip" onClick={onBack}>
           ↩ Other problems
         </button>
@@ -450,7 +483,7 @@ export default function Session({
             <Whiteboard
               ref={wb}
               height={boardH}
-              speed={prefs.pace === "slow" ? 0.6 : 1}
+              speed={prefs.speed || 1}
               onBusyChange={setBoardBusy}
               empty={
                 <div className="wb-empty-inner">

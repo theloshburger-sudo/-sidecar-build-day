@@ -35,6 +35,7 @@ export async function POST(req: Request) {
     pace: body.preferences?.pace ?? "normal",
     voice: false,
     focus: false,
+    speed: 1,
   } as TutorRequest["preferences"];
 
   const effort = (["low", "medium", "high"].includes(process.env.ANTHROPIC_EFFORT ?? "")
