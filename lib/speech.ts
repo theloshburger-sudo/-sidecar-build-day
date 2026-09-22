@@ -108,9 +108,11 @@ export function speakable(text: string): string {
 // ---- playback state (one voice at a time) ----
 let audio: HTMLAudioElement | null = null;
 let token = 0;
+const waiting = new Set<() => void>();
+const ttsCache = new Map<string, Promise<Blob | null>>();
 
 export interface SpeakOptions {
-  /** 0.5–2; the voice is kept in a comfortable 0.75–1.5 range. */
+  /** Voice speed, kept in a comfortable 0.75–1.5 range. */
   rate?: number;
   /** Use the natural server voice (/api/tts) when available. */
   natural?: boolean;
@@ -121,11 +123,31 @@ export interface SpeakOptions {
 
 const estimateMs = (text: string, rate: number) => (text.split(/\s+/).filter(Boolean).length / 2.6 / rate) * 1000 + 300;
 
+/** Fetch (and cache) natural-voice audio, so the next beat is ready before the current one ends. */
+function fetchTTS(text: string): Promise<Blob | null> {
+  const clean = speakable(text);
+  if (!clean) return Promise.resolve(null);
+  const hit = ttsCache.get(clean);
+  if (hit) return hit;
+  const ctrl = new AbortController();
+  const giveUp = setTimeout(() => ctrl.abort(), 6000);
+  const p = fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: clean }), signal: ctrl.signal })
+    .then((r) => (r.ok ? r.blob() : null))
+    .catch(() => null)
+    .finally(() => clearTimeout(giveUp));
+  ttsCache.set(clean, p);
+  if (ttsCache.size > 60) ttsCache.delete(ttsCache.keys().next().value!);
+  return p;
+}
+
+export function prefetchVoice(text: string) {
+  void fetchTTS(text);
+}
+
 /**
  * Speak with the most human voice available: ElevenLabs via /api/tts, falling back
  * to the best browser voice (sentence by sentence, which also avoids Chrome's
- * long-utterance cutoff). onStart reports how long the speech will take so the
- * whiteboard can pace its drawing to match.
+ * long-utterance cutoff). onStart reports how long the speech will take.
  */
 export function speak(text: string, opts: SpeakOptions = {}) {
   stopSpeaking();
@@ -133,6 +155,7 @@ export function speak(text: string, opts: SpeakOptions = {}) {
   const clean = speakable(text);
   const rate = Math.min(1.5, Math.max(0.75, opts.rate ?? 1));
   if (!clean) {
+    opts.onStart?.(0);
     opts.onEnd?.();
     return;
   }
@@ -141,13 +164,19 @@ export function speak(text: string, opts: SpeakOptions = {}) {
     if (my !== token) return;
     if (!ttsSupported()) {
       opts.onStart?.(estimateMs(clean, rate));
-      opts.onEnd?.();
+      setTimeout(() => my === token && opts.onEnd?.(), estimateMs(clean, rate));
       return;
     }
     const synth = window.speechSynthesis;
     const parts = clean.match(/[^.!?]+[.!?]*/g)?.map((p) => p.trim()).filter(Boolean) ?? [clean];
     const v = pickVoice();
     let started = false;
+    let ended = false;
+    const finish = () => {
+      if (ended || my !== token) return;
+      ended = true;
+      opts.onEnd?.();
+    };
     parts.forEach((part, i) => {
       const u = new SpeechSynthesisUtterance(part);
       if (v) u.voice = v;
@@ -160,52 +189,60 @@ export function speak(text: string, opts: SpeakOptions = {}) {
           opts.onStart?.(estimateMs(clean, rate));
         };
       if (i === parts.length - 1) {
-        u.onend = () => my === token && opts.onEnd?.();
-        u.onerror = () => my === token && opts.onEnd?.();
+        u.onend = finish;
+        u.onerror = finish;
       }
       synth.speak(u);
     });
-    // Some browsers never fire onstart (muted tab, no voices): don't hold the drawing hostage.
+    // Some browsers never fire events (muted tab, no voices): don't hold the lesson hostage.
     setTimeout(() => {
       if (my === token && !started) {
         started = true;
         opts.onStart?.(estimateMs(clean, rate));
+        setTimeout(finish, estimateMs(clean, rate));
       }
     }, 900);
   };
 
   if (!opts.natural) return browserVoice();
 
-  const ctrl = new AbortController();
-  const giveUp = setTimeout(() => ctrl.abort(), 5000);
-  fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: clean }), signal: ctrl.signal })
-    .then((r) => (r.ok ? r.blob() : Promise.reject(new Error("tts"))))
-    .then((blob) => {
-      clearTimeout(giveUp);
-      if (my !== token) return;
-      const url = URL.createObjectURL(blob);
-      const el = new Audio(url);
-      audio = el;
-      el.playbackRate = rate;
-      (el as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
-      let started = false;
-      el.onplaying = () => {
-        if (started || my !== token) return;
-        started = true;
-        const secs = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : estimateMs(clean, 1) / 1000;
-        opts.onStart?.((secs * 1000) / rate);
-      };
-      el.onended = () => {
-        URL.revokeObjectURL(url);
-        if (my === token) opts.onEnd?.();
-      };
-      el.onerror = () => browserVoice();
-      el.play().catch(() => browserVoice()); // autoplay blocked or decode error
-    })
-    .catch(() => {
-      clearTimeout(giveUp);
-      browserVoice();
-    });
+  fetchTTS(text).then((blob) => {
+    if (my !== token) return;
+    if (!blob) return browserVoice();
+    const url = URL.createObjectURL(blob);
+    const el = new Audio(url);
+    audio = el;
+    el.playbackRate = rate;
+    (el as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
+    let started = false;
+    el.onplaying = () => {
+      if (started || my !== token) return;
+      started = true;
+      const secs = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : estimateMs(clean, 1) / 1000;
+      opts.onStart?.((secs * 1000) / rate);
+    };
+    el.onended = () => {
+      URL.revokeObjectURL(url);
+      if (my === token) opts.onEnd?.();
+    };
+    el.onerror = () => browserVoice();
+    el.play().catch(() => browserVoice()); // autoplay blocked or decode error
+  });
+}
+
+/** Promise form of speak(): resolves when the line finishes, or immediately if speech is stopped. */
+export function speakAsync(text: string, opts: Omit<SpeakOptions, "onEnd"> = {}): Promise<void> {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      waiting.delete(finish);
+      resolve();
+    };
+    speak(text, { ...opts, onEnd: finish });
+    waiting.add(finish);
+  });
 }
 
 export function stopSpeaking() {
@@ -215,4 +252,5 @@ export function stopSpeaking() {
     audio = null;
   }
   if (ttsSupported()) window.speechSynthesis.cancel();
+  for (const w of [...waiting]) w();
 }

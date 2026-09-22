@@ -10,8 +10,11 @@ import type { AppStatus, Engine } from "./SidecarApp";
 import { applyActions, boardHeight, describeBoard, emptyBoard, BOARD_MIN_H, type BoardState, type Measure } from "@/lib/board";
 import { getDemo } from "@/lib/demo";
 import { demoReply, demoStart, type DemoState } from "@/lib/demo-engine";
-import { createRecognizer, speak, speechRecognitionSupported, stopSpeaking, ttsSupported } from "@/lib/speech";
-import type { Assignment, ChatEntry, Phase, Preferences, Problem, TutorTurn, VideoSuggestion } from "@/lib/types";
+import { createRecognizer, prefetchVoice, speakAsync, speechRecognitionSupported, stopSpeaking, ttsSupported } from "@/lib/speech";
+import { BeatBuilder, beatsFromTurn, type Beat } from "@/lib/narration";
+import { BoardStreamParser, STREAM_ERROR } from "@/lib/stream-parse";
+import { normalizeTurn } from "@/lib/sanitize";
+import type { Assignment, BoardAction, ChatEntry, Phase, Preferences, Problem, TutorTurn, VideoSuggestion } from "@/lib/types";
 
 const PHASES: { id: Phase; label: string }[] = [
   { id: "diagnose", label: "Find the gap" },
@@ -21,7 +24,8 @@ const PHASES: { id: Phase; label: string }[] = [
   { id: "wrapup", label: "Done" },
 ];
 
-const SPEEDS = [0.5, 1, 1.5, 2];
+const DRAW_SPEEDS = [0, 0.25, 0.5, 1, 1.5, 2]; // 0 = Auto (paced to the voice)
+const VOICE_SPEEDS = [0.75, 1, 1.25, 1.5];
 
 const QUICK = ["Why?", "Show it differently", "Slow down", "Give me an example"];
 
@@ -81,6 +85,13 @@ export default function Session({
   const [practice, setPractice] = useState("");
   const [practiceResult, setPracticeResult] = useState<string | null>(null);
   const [showProblem, setShowProblem] = useState(true);
+  /** Spoken lines of the current turn, revealed as they're said, and which one is playing. */
+  const [beatLines, setBeatLines] = useState<string[]>([]);
+  const [activeBeat, setActiveBeat] = useState(-1);
+  const [streaming, setStreaming] = useState(false);
+  const [penMode, setPenMode] = useState(false);
+  const [inkCount, setInkCount] = useState(0);
+  const inkSent = useRef(0);
 
   const wb = useRef<WhiteboardHandle>(null);
   const board = useRef<BoardState>(emptyBoard());
@@ -93,9 +104,10 @@ export default function Session({
   const started = useRef(false);
   const prefsRef = useRef(prefs);
   prefsRef.current = prefs;
+  const playToken = useRef(0);
   const statusRef = useRef(status);
-  /** Strokes waiting for the voice to start; flushed if the student interrupts first. */
-  const pendingDraw = useRef<(() => void) | null>(null);
+  /** The beat player for the turn currently being taught (see playTurn). */
+  const player = useRef<{ push(a: BoardAction): void; end(turn: TutorTurn): void; flush(): void } | null>(null);
   statusRef.current = status;
 
   const lastTutor = useMemo(() => {
@@ -113,13 +125,122 @@ export default function Session({
     setHistory(historyRef.current);
   };
 
-  // ---------------------------------------------------------------- applying a turn
-  const applyTurn = useCallback((turn: TutorTurn) => {
-    pushHistory({ role: "tutor", turn });
-    const m = measure.current ?? undefined;
-    const res = applyActions(board.current, turn.board, m);
+  // ---------------------------------------------------------------- teaching a turn, beat by beat
+  /** Draw one beat's actions; resolves when the drawing (and its spoken line) are both finished. */
+  const playBeat = useCallback(async (beat: Beat, alive: () => boolean) => {
+    const res = applyActions(board.current, beat.actions, measure.current ?? undefined);
     board.current = res.state;
     setBoardH(boardHeight(res.state));
+    const p = prefsRef.current;
+    const auto = !p.speed;
+    if (p.voice && beat.text) {
+      let drawn = false;
+      const speech = speakAsync(beat.text, {
+        rate: p.voiceSpeed || 1,
+        natural: Boolean(statusRef.current?.voice),
+        onStart: (ms) => {
+          if (!alive()) return;
+          drawn = true;
+          setSpeaking(true);
+          wb.current?.enqueue(res.prims, auto ? ms * 0.9 : undefined);
+        },
+      });
+      await speech;
+      if (!drawn) wb.current?.enqueue(res.prims);
+      setSpeaking(false);
+      await wb.current?.whenIdle();
+    } else {
+      wb.current?.enqueue(res.prims);
+      await wb.current?.whenIdle();
+      // Give the reader a moment on beats that are mostly talk.
+      if (beat.text && alive()) await new Promise((r) => setTimeout(r, Math.min(1400, 250 + beat.text.split(" ").length * 45)));
+    }
+  }, []);
+
+  /** Start a player that plays beats as they arrive (from a stream) or all at once (demo/replay). */
+  const startPlayer = useCallback(() => {
+    const id = ++playToken.current;
+    const alive = () => id === playToken.current;
+    const builder = new BeatBuilder();
+    let beats: Beat[] = builder.beats;
+    let closed = () => builder.closed;
+    let ended = false;
+    let next = 0;
+    let sawNarrate = false;
+    let wake: (() => void) | null = null;
+    const notify = () => {
+      const w = wake;
+      wake = null;
+      w?.();
+    };
+    const natural = () => prefsRef.current.voice && Boolean(statusRef.current?.voice);
+    const syncLines = () => setBeatLines(beats.map((b) => b.text));
+
+    setBeatLines([]);
+    setActiveBeat(-1);
+    (async () => {
+      while (alive()) {
+        if (next < closed()) {
+          const i = next++;
+          setActiveBeat(i);
+          if (natural() && beats[i + 1]?.text) prefetchVoice(beats[i + 1].text);
+          await playBeat(beats[i], alive);
+          continue;
+        }
+        if (ended) break;
+        await new Promise<void>((r) => (wake = r));
+      }
+      if (alive()) setActiveBeat(-1);
+    })();
+
+    const handle = {
+      push(a: BoardAction) {
+        if (!alive()) return;
+        if (a.type === "narrate") {
+          sawNarrate = true;
+          if (natural() && a.text) prefetchVoice(String(a.text));
+        }
+        builder.push(a);
+        syncLines();
+        notify();
+      },
+      end(turn: TutorTurn) {
+        if (!alive()) return;
+        if (!sawNarrate) {
+          // The reply had no narrate steps: pair its sentences with slices of the drawing instead.
+          beats = beatsFromTurn(turn);
+          closed = () => beats.length;
+          if (natural() && beats[0]?.text) prefetchVoice(beats[0].text);
+        } else builder.end();
+        ended = true;
+        syncLines();
+        notify();
+      },
+      flush() {
+        // Interrupted: put the rest of this turn on the board instantly.
+        if (!alive()) return;
+        playToken.current++;
+        const rest = beats.slice(next).flatMap((b) => b.actions);
+        next = beats.length;
+        if (rest.length) {
+          const res = applyActions(board.current, rest, measure.current ?? undefined);
+          board.current = res.state;
+          setBoardH(boardHeight(res.state));
+          wb.current?.enqueue(res.prims);
+        }
+        wb.current?.finishNow();
+        setActiveBeat(-1);
+        setBeatLines(beats.map((b) => b.text));
+        notify();
+      },
+    };
+    player.current = handle;
+    return handle;
+  }, [playBeat]);
+
+  /** Record a finished turn: history, progress, celebration. */
+  const finishTurn = useCallback((turn: TutorTurn) => {
+    pushHistory({ role: "tutor", turn });
     if (turn.plan.length) setPlan(turn.plan);
     if (turn.gap) setGap(turn.gap);
     if (turn.videos.length) setVideos(turn.videos);
@@ -128,34 +249,14 @@ export default function Session({
       setHappy(true);
       setTimeout(() => setHappy(false), 2600);
     }
-    if (prefsRef.current.voice) {
-      // Voice on: start drawing when the voice starts, paced so both finish together.
-      let drawn = false;
-      const draw = (ms?: number) => {
-        if (drawn) return;
-        drawn = true;
-        pendingDraw.current = null;
-        wb.current?.enqueue(res.prims, ms);
-      };
-      pendingDraw.current = () => draw();
-      const fallback = setTimeout(() => draw(), 6000);
-      speak(turn.say, {
-        rate: prefsRef.current.speed || 1,
-        natural: Boolean(statusRef.current?.voice),
-        onStart: (ms) => {
-          clearTimeout(fallback);
-          setSpeaking(true);
-          draw(ms * 0.95);
-        },
-        onEnd: () => {
-          clearTimeout(fallback);
-          setSpeaking(false);
-          draw();
-        },
-      });
-    } else {
-      wb.current?.enqueue(res.prims);
-    }
+  }, []);
+
+  /** Interrupt whatever Teacher is saying/drawing. */
+  const interrupt = useCallback(() => {
+    stopSpeaking();
+    setSpeaking(false);
+    player.current?.flush();
+    wb.current?.finishNow();
   }, []);
 
   // ---------------------------------------------------------------- asking the tutor
@@ -163,22 +264,26 @@ export default function Session({
     (text: string | null) => {
       if (!lesson) return;
       setThinking(true);
-      const delay = 500 + Math.random() * 400;
+      const delay = 400 + Math.random() * 300;
       setTimeout(() => {
         const r = text === null || !demoState.current ? demoStart(lesson) : demoReply(lesson, demoState.current, text);
         demoState.current = r.state;
         setThinking(false);
-        applyTurn(r.turn);
+        const pl = startPlayer();
+        finishTurn(r.turn);
+        pl.end(r.turn);
       }, delay);
     },
-    [lesson, applyTurn],
+    [lesson, startPlayer, finishTurn],
   );
 
   const askTutor = useCallback(
-    async (text: string | null, useEngine: Engine) => {
+    async (text: string | null, useEngine: Engine, image?: string) => {
       setError(null);
       if (useEngine === "demo") return runDemo(text);
       setThinking(true);
+      setStreaming(true);
+      let pl: ReturnType<typeof startPlayer> | null = null;
       try {
         const prior = text === null ? historyRef.current : historyRef.current.slice(0, -1);
         const res = await fetch("/api/tutor", {
@@ -190,14 +295,39 @@ export default function Session({
             history: prior,
             boardSummary: describeBoard(board.current),
             studentMessage: text ?? "",
+            image,
           }),
         });
-        const data = (await res.json().catch(() => ({}))) as { turn?: TutorTurn; error?: string };
-        if (!res.ok || !data.turn) throw new Error(data.error || `The tutor didn't respond (error ${res.status}).`);
+        if (!res.ok || !res.body) {
+          const data = (await res.json().catch(() => ({}))) as { error?: string };
+          throw new Error(data.error || `The tutor didn't respond (error ${res.status}).`);
+        }
+        // Stream: start teaching the first beat while Claude is still writing the rest.
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        const parser = new BoardStreamParser();
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          const errAt = chunk.indexOf(STREAM_ERROR);
+          if (errAt >= 0) throw new Error(chunk.slice(errAt + STREAM_ERROR.length).trim() || "The tutor hit a snag.");
+          for (const action of parser.feed(chunk)) {
+            if (!pl) {
+              pl = startPlayer();
+              setThinking(false);
+            }
+            pl.push(action as unknown as BoardAction);
+          }
+        }
+        const turn = normalizeTurn(JSON.parse(parser.text));
+        if (!pl) pl = startPlayer();
         setThinking(false);
-        applyTurn(data.turn);
+        finishTurn(turn);
+        pl.end(turn);
       } catch (e) {
         setThinking(false);
+        pl?.flush();
         const message = e instanceof Error && e.message !== "Failed to fetch" ? e.message : "Couldn't reach the tutor. Check your connection.";
         // First turn of a sample lesson? Quietly fall back to the offline script so a demo never dies.
         if (lesson && historyRef.current.every((h) => h.role !== "tutor")) {
@@ -207,9 +337,11 @@ export default function Session({
           return;
         }
         setError({ message, retry: text });
+      } finally {
+        setStreaming(false);
       }
     },
-    [problem, lesson, applyTurn, runDemo],
+    [problem, lesson, startPlayer, finishTurn, runDemo],
   );
 
   // Kick off the session once fonts are ready (so handwriting measures correctly).
@@ -252,18 +384,21 @@ export default function Session({
 
   // ---------------------------------------------------------------- student input
   const send = useCallback(
-    (raw: string) => {
+    async (raw: string) => {
       const text = raw.trim().slice(0, 1500);
-      if (!text || thinking) return;
-      stopSpeaking();
-      setSpeaking(false);
-      pendingDraw.current?.();
-      wb.current?.finishNow(); // interruption: finish drawing instantly, then respond
+      if (!text || thinking || streaming) return;
+      interrupt(); // finish the current drawing instantly, stop talking, then respond
       pushHistory({ role: "student", text });
       setInput("");
-      askTutor(text, engine);
+      // New ink since the last message? Show Claude the board.
+      let image: string | undefined;
+      if (inkCount > inkSent.current && engine === "live") {
+        image = (await wb.current?.snapshot()) ?? undefined;
+        inkSent.current = inkCount;
+      }
+      askTutor(text, engine, image);
     },
-    [thinking, askTutor, engine],
+    [thinking, streaming, askTutor, engine, interrupt, inkCount],
   );
 
   useEffect(() => {
@@ -277,9 +412,7 @@ export default function Session({
       recognizer.current?.stop();
       return;
     }
-    stopSpeaking();
-    pendingDraw.current?.();
-      wb.current?.finishNow();
+    interrupt();
     let latest = "";
     const rec = createRecognizer({
       onText: (t, final) => {
@@ -311,16 +444,11 @@ export default function Session({
   // Esc stops the voice / drawing.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        stopSpeaking();
-        setSpeaking(false);
-        pendingDraw.current?.();
-      wb.current?.finishNow();
-      }
+      if (e.key === "Escape") interrupt();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [interrupt]);
 
   useEffect(() => {
     if (!notice) return;
@@ -375,14 +503,6 @@ export default function Session({
             {prefs.voice ? "🔊 Voice" : "🔈 Voice"}
           </button>
         )}
-        <div className="speed" role="group" aria-label="Drawing speed" title="How fast Teacher draws">
-          <span aria-hidden>✏️</span>
-          {SPEEDS.map((v) => (
-            <button key={v} className={prefs.speed === v ? "is-on" : ""} onClick={() => setPrefs({ speed: v })} aria-pressed={prefs.speed === v}>
-              {v}×
-            </button>
-          ))}
-        </div>
         <button className="chip" onClick={onBack}>
           ↩ Other problems
         </button>
@@ -461,6 +581,19 @@ export default function Session({
               <div className="caption" aria-live="polite">
                 {thinking ? (
                   <span className="muted">Teacher is thinking…</span>
+                ) : beatLines.some(Boolean) ? (
+                  <>
+                    {!streaming && lastTutor?.verdict === "correct" && <span className="verdict verdict--ok">Nice! ✓</span>}
+                    {!streaming && lastTutor?.verdict === "partial" && <span className="verdict verdict--mid">Almost</span>}
+                    {!streaming && lastTutor?.verdict === "incorrect" && <span className="verdict verdict--no">Not yet, and that&apos;s okay</span>}
+                    {beatLines.map((line, i) =>
+                      line && (activeBeat === -1 || i <= activeBeat) ? (
+                        <span key={i} className={`beat ${activeBeat === -1 ? "" : i === activeBeat ? "beat--now" : "beat--past"}`}>
+                          {line}{" "}
+                        </span>
+                      ) : null,
+                    )}
+                  </>
                 ) : lastTutor ? (
                   <>
                     {lastTutor.verdict === "correct" && <span className="verdict verdict--ok">Nice! ✓</span>}
@@ -480,11 +613,53 @@ export default function Session({
                 </div>
               )}
             </div>
+            <div className="board-tools">
+              <button className={`tool ${penMode ? "tool--on" : ""}`} onClick={() => setPenMode((v) => !v)} aria-pressed={penMode} title="Draw on the whiteboard with your mouse, finger or pen">
+                ✍️ {penMode ? "Drawing on" : "Draw"}
+              </button>
+              {inkCount > 0 && (
+                <button
+                  className="tool"
+                  onClick={() => {
+                    wb.current?.clearInk();
+                    inkSent.current = 0;
+                  }}
+                >
+                  🧽 Clear my ink
+                </button>
+              )}
+              {inkCount > inkSent.current && engine === "live" && !thinking && !streaming && (
+                <button className="tool tool--send" onClick={() => send(input.trim() || "Take a look at what I drew on the board.")}>
+                  Show Teacher my drawing →
+                </button>
+              )}
+              <span className="tools-spacer" />
+              <div className="speed" role="group" aria-label="Drawing speed" title="How fast Teacher draws. Auto matches the voice.">
+                <span aria-hidden>✏️</span>
+                {DRAW_SPEEDS.map((v) => (
+                  <button key={v} className={(prefs.speed || 0) === v ? "is-on" : ""} onClick={() => setPrefs({ speed: v })} aria-pressed={(prefs.speed || 0) === v}>
+                    {v === 0 ? "Auto" : `${v}×`}
+                  </button>
+                ))}
+              </div>
+              {prefs.voice && (
+                <div className="speed" role="group" aria-label="Voice speed" title="How fast Teacher talks">
+                  <span aria-hidden>🔊</span>
+                  {VOICE_SPEEDS.map((v) => (
+                    <button key={v} className={(prefs.voiceSpeed || 1) === v ? "is-on" : ""} onClick={() => setPrefs({ voiceSpeed: v })} aria-pressed={(prefs.voiceSpeed || 1) === v}>
+                      {v}×
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <Whiteboard
               ref={wb}
               height={boardH}
               speed={prefs.speed || 1}
               onBusyChange={setBoardBusy}
+              penMode={penMode}
+              onInkChange={setInkCount}
               empty={
                 <div className="wb-empty-inner">
                   <Cloud size={96} mood="thinking" />
@@ -593,7 +768,7 @@ export default function Session({
                   🎙️
                 </button>
               )}
-              <button type="submit" className="btn btn--primary" disabled={!input.trim() || thinking}>
+              <button type="submit" className="btn btn--primary" disabled={!input.trim() || thinking || streaming}>
                 Send
               </button>
             </form>

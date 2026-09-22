@@ -19,7 +19,7 @@ export const TUTOR_SYSTEM = `You are "Teacher", a friendly, sleek little floatin
 # Hard rules
 - NEVER hand over the final answer to the student's assigned problem. Teach the next idea, then make them do the step. You may fully solve a parallel example with different numbers.
 - Always answer the student's actual interruption first ("why did we divide?", "show that differently", "slow down"). If they ask to see it differently, change the representation on the board. If confused, slow down: smaller steps, concrete numbers, an analogy.
-- "say" is spoken aloud: 1–3 short, natural sentences (max ~60 words). No markdown, no LaTeX, no lists. Say "x squared", not "x^2".
+- Everything you say out loud goes in "narrate" steps on the board (see below), and "say" must be "". Talk like a warm human tutor sitting next to them: short, natural sentences, about 60 words max per turn. No markdown, no LaTeX, no lists. Say "x squared", not "x^2".
 - "question" is the one thing you want them to answer now (or "" if none). Use "choices" for quick taps (or [] for open answers). A question should appear in almost every turn.
 - Don't claim fixed "learning styles". The student picked a preferred starting format; adapt based on what actually helps in this session.
 - Videos: suggest 1–2 YouTube searches in "videos" ONLY when truly useful (e.g. they're still stuck after a reteach, or at wrapup). Make the query precise (e.g. "completing the square visual explanation"). Otherwise [].
@@ -28,7 +28,9 @@ export const TUTOR_SYSTEM = `You are "Teacher", a friendly, sleek little floatin
 - Stay on the student's schoolwork. If asked something unrelated or unsafe, kindly steer back.
 
 # The whiteboard (the "board" array) — draw like a great teacher with a marker
-Actions animate one after another as you talk, so ORDER MATTERS: draw in the order you explain. Use 2–12 actions per turn. Keep text short (board notes, not paragraphs). Use plain Unicode math: x², √, ×, ÷, −, ≤, ≥, π, Δ, subscripts like H₂O, CO₂.
+TEACH IN BEATS so your words match your drawing. The board array is a script: a narrate step (one short spoken sentence, ≤ 20 words), then the 1–3 actions you draw WHILE saying it, then the next narrate, and so on. Use 2–5 beats per turn. Every beat must talk about exactly what it draws ("First I'll circle the 3x…" then the circle). Point at things as you speak ("this bracket here…"). The last beat usually asks your question out loud.
+If the student drew on the whiteboard, you'll get an image of the board; the student's ink is green. Look at it carefully and respond to exactly what they drew (their work, a mistake, an arrow they drew).
+Actions animate in order, so ORDER MATTERS. Use 2–12 actions per turn. Keep text short (board notes, not paragraphs). Use plain Unicode math: x², √, ×, ÷, −, ≤, ≥, π, Δ, subscripts like H₂O, CO₂.
 Layout: the board is 1000 units wide and flows top-to-bottom. Zones: "left" (main column, ~36 characters per line at md), "right" (narrow side column, good for a graph or a small box), "full" (whole width). Each zone stacks downward automatically — you never pick y for normal content. Use left for steps and right for a graph/side notes to show both at once.
 Give ids to things you will point at later (e.g. "eq1", "g1").
 
@@ -48,6 +50,7 @@ Action types. Every action must include ALL fields listed for its type; use "" (
 - tAccount {id, text: account name, debits: [...], credits: [...]} — T-accounts sit side by side automatically.
 - timeline {id, text: title, items: ["label: detail", ...]} — dates, accrual periods, historical events, process steps.
 - numberLine {id, zone, xMin, xMax, text: title, items: ["I: (0, 3]", "J: [-3, 2)", "x ≥ 4", "K: (-∞, 1]"]} — USE THIS (not graph) for intervals, inequalities, unions/intersections and number lines. Each item gets its own colored row with open ○ / closed ● endpoints lined up over one shared axis. Children are "<id>.1", "<id>.2"...
+- narrate {text} — a spoken line (not drawn). Starts a new beat; the actions after it are drawn while it is spoken.
 - askQuestion {text} — writes your check question on the board in purple.
 - drawLine {x1, y1, x2, y2, color} — raw line in board units (rarely needed).
 - clear {} — wipe the board. Use it when starting a fresh idea and the board is getting full (see board state).
@@ -71,7 +74,37 @@ export function firstMessage(problem: Problem, prefs: Preferences): string {
 }
 
 /** Convert UI chat history into alternating Claude messages. */
+type ImageMedia = "image/jpeg" | "image/png";
+export type MessageContent =
+  | string
+  | ({ type: "text"; text: string } | { type: "image"; source: { type: "base64"; media_type: ImageMedia; data: string } })[];
+
+/** Conversation for the tutor call; attaches the board image (student ink) to the last user message. */
 export function toMessages(
+  problem: Problem,
+  prefs: Preferences,
+  history: ChatEntry[],
+  boardSummary: string,
+  studentMessage: string,
+  image?: string,
+): { role: "user" | "assistant"; content: MessageContent }[] {
+  const base = textMessages(problem, prefs, history, boardSummary, studentMessage);
+  const m = image ? /^data:(image\/(?:jpeg|png));base64,([A-Za-z0-9+/=]+)$/.exec(image) : null;
+  if (!m) return base;
+  const last = base[base.length - 1];
+  return [
+    ...base.slice(0, -1),
+    {
+      role: "user",
+      content: [
+        { type: "image", source: { type: "base64", media_type: m[1] as ImageMedia, data: m[2] } },
+        { type: "text", text: `${last.content}\n\n[Image above: the whiteboard right now. The student's own drawing is in GREEN ink.]` },
+      ],
+    },
+  ];
+}
+
+function textMessages(
   problem: Problem,
   prefs: Preferences,
   history: ChatEntry[],
@@ -93,7 +126,7 @@ export function toMessages(
         plan: t.plan,
         step: t.step,
         practice: t.practice,
-        board: t.board.map((b) => ({ type: b.type, id: b.id, text: b.text })).slice(0, 14),
+        board: t.board.filter((b) => b.type !== "narrate").map((b) => ({ type: b.type, id: b.id, text: b.text })).slice(0, 14),
       });
       pushMsg(msgs, "assistant", compact);
     } else {

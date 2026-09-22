@@ -21,7 +21,10 @@ Upload a Canvas assignment or study guide (PDF or a phone photo), tap the one pr
 | **Focus Mode** | Shows only the board, the current question and a progress meter. |
 | **Your pace, your format** | You pick a starting format (draw it / worked example / analogy / questions). These aren't treated as fixed "learning styles", and Teacher adapts from what you ask. There's also an extra-small-steps mode. |
 | **Voice, synced to the board** | Teacher talks with a natural ElevenLabs voice, or the best browser voice as a fallback. Drawing starts when the voice starts and is paced to finish with it. Speech recognition lets you talk back. Voice is optional: every control also works with text. |
-| **Drawing speed** | 0.5× / 1× / 1.5× / 2× in the top bar. With voice on, it also sets how fast Teacher talks. |
+| **Talk and draw in step** | Teacher teaches in short beats: one spoken line, then exactly the strokes it describes. The caption highlights the line being spoken. |
+| **Fast replies** | Claude's reply streams in, so Teacher starts the first beat while the rest is still being written. The system prompt is cached. |
+| **Speed controls** | Drawing: Auto (matches the voice) / 0.25× / 0.5× / 1× / 1.5× / 2×. Voice: 0.75× / 1× / 1.25× / 1.5×. |
+| **Draw on the board yourself** | ✍️ **Draw** lets you write on the whiteboard with a mouse, finger or stylus. Your green ink is sent to Claude as an image with your next message, so Teacher can respond to what you drew. |
 | **Videos, only when useful** | 1–2 targeted YouTube suggestions, shown as real video cards if a YouTube key is set and as search links otherwise. |
 | **Offline demo mode** | Four fully scripted lessons (Algebra, Accounting, Chemistry, Economics) that run with **no internet and no API key**. If live AI fails on a sample's first turn, the app switches to the script automatically. |
 | **Private** | No accounts and no database. Recent sessions are stored only in your browser (localStorage). |
@@ -46,7 +49,7 @@ Without a key the app still runs. The four sample assignments work fully offline
 |---|---|---|
 | `ANTHROPIC_API_KEY` | For live tutoring | Get one at [console.anthropic.com](https://console.anthropic.com/) → **API Keys** → *Create Key*. Add a few dollars of credit under **Billing**. |
 | `ANTHROPIC_MODEL` | No | Defaults to `claude-sonnet-5`, which is fast and smart. `claude-opus-5-5` gives the highest quality but is slower. |
-| `ANTHROPIC_EFFORT` | No | `low` / `medium` (default) / `high`. `low` gives the snappiest replies. |
+| `ANTHROPIC_EFFORT` | No | `low` (default, fastest) / `medium` / `high`. Higher effort thinks longer before answering. |
 | `ELEVENLABS_API_KEY` | No | A natural, human-sounding voice for Teacher. Free plan at [elevenlabs.io](https://elevenlabs.io): Profile → API Keys. Without it, Teacher uses the best voice built into the browser. `ELEVENLABS_VOICE_ID` picks a different voice. |
 | `YOUTUBE_API_KEY` | No | Real video cards instead of search links. In Google Cloud Console, enable **YouTube Data API v3**, then go to Credentials → API key. |
 

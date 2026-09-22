@@ -20,6 +20,19 @@ await page.waitForFunction(() => document.querySelectorAll(".msg--tutor").length
 await page.waitForTimeout(3500);
 await page.screenshot({ path: `${OUT}/l2-live.png` });
 console.log("turn 2:", (await page.locator(".caption").innerText()).slice(0, 80));
+// Student draws on the board, then asks about it: the request should carry an image.
+await page.getByRole("button", { name: /Draw/ }).click();
+const box = await page.locator(".wb-svg").boundingBox();
+await page.mouse.move(box.x + 120, box.y + 300);
+await page.mouse.down();
+for (let k = 0; k < 12; k++) await page.mouse.move(box.x + 120 + k * 15, box.y + 300 + Math.sin(k) * 20);
+await page.mouse.up();
+await page.waitForTimeout(300);
+console.log("ink strokes on board:", await page.locator(".wb-ink path").count());
+await page.getByRole("button", { name: /Show Teacher my drawing/ }).click();
+await page.waitForFunction(() => document.querySelectorAll(".msg--tutor").length >= 3, null, { timeout: 60000 });
+await page.waitForTimeout(1500);
+await page.screenshot({ path: `${OUT}/l3-ink.png` });
 console.log("plan steps:", await page.locator(".plan li").count(), "| videos:", await page.locator(".video").count(), "| status:", await page.locator(".pill").innerText());
 console.log("page errors:", errors.length ? errors : "none");
 await browser.close();

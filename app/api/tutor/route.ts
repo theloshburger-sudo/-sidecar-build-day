@@ -1,8 +1,9 @@
+import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
-import { MODEL, createJSON, friendlyError, hasKey, rateLimited } from "@/lib/server/claude";
+import { MODEL, createJSON, friendlyError, getClient, hasKey, rateLimited } from "@/lib/server/claude";
 import { TUTOR_SYSTEM, toMessages } from "@/lib/prompt";
 import { tutorTurnSchema } from "@/lib/schema";
-import { normalizeTurn } from "@/lib/sanitize";
+import { STREAM_ERROR } from "@/lib/stream-parse";
 import type { TutorRequest } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -10,6 +11,11 @@ export const maxDuration = 60;
 
 type Effort = "low" | "medium" | "high";
 
+/**
+ * Streams the tutor's JSON reply as plain text while Claude writes it. The client parses
+ * board actions out of the partial JSON, so Teacher starts talking and drawing within a
+ * second or two instead of waiting for the whole reply.
+ */
 export async function POST(req: Request) {
   if (!hasKey()) {
     return NextResponse.json(
@@ -36,26 +42,64 @@ export async function POST(req: Request) {
     voice: false,
     focus: false,
     speed: 1,
+    voiceSpeed: 1,
   } as TutorRequest["preferences"];
+  const image = typeof body.image === "string" && body.image.length < 3_000_000 ? body.image : undefined;
 
-  const effort = (["low", "medium", "high"].includes(process.env.ANTHROPIC_EFFORT ?? "")
-    ? process.env.ANTHROPIC_EFFORT
-    : "medium") as Effort;
+  const effort = (["low", "medium", "high"].includes(process.env.ANTHROPIC_EFFORT ?? "") ? process.env.ANTHROPIC_EFFORT : "low") as Effort;
+  const messages = toMessages(
+    body.problem,
+    prefs,
+    Array.isArray(body.history) ? body.history : [],
+    String(body.boardSummary ?? ""),
+    String(body.studentMessage ?? ""),
+    image,
+  ) as Anthropic.MessageParam[];
+  const schema = tutorTurnSchema as unknown as Record<string, unknown>;
+  const haiku = /haiku/i.test(MODEL);
 
-  try {
-    const raw = await createJSON({
-      model: MODEL,
-      max_tokens: 8000,
-      system: TUTOR_SYSTEM,
-      messages: toMessages(body.problem, prefs, Array.isArray(body.history) ? body.history : [], String(body.boardSummary ?? ""), String(body.studentMessage ?? "")),
-      effort,
-      schema: tutorTurnSchema as unknown as Record<string, unknown>,
-    });
-    const turn = normalizeTurn(raw);
-    return NextResponse.json({ turn, model: MODEL });
-  } catch (err) {
-    console.error("tutor error", err);
-    const { status, message } = friendlyError(err);
-    return NextResponse.json({ error: message }, { status });
-  }
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let sent = false;
+      const send = (t: string) => {
+        sent = true;
+        controller.enqueue(encoder.encode(t));
+      };
+      try {
+        const s = getClient().messages.stream({
+          model: MODEL,
+          max_tokens: 8000,
+          // Cached system prompt: repeat turns skip re-reading it, which cuts time-to-first-token.
+          system: [{ type: "text", text: TUTOR_SYSTEM, cache_control: { type: "ephemeral" } }],
+          messages,
+          output_config: { effort: haiku ? undefined : effort, format: { type: "json_schema", schema } },
+        });
+        for await (const ev of s) {
+          if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") send(ev.delta.text);
+        }
+      } catch (err) {
+        const schemaProblem =
+          err instanceof Anthropic.APIError && err.status === 400 && /schema|grammar|complex|output_config|format|json/i.test(err.message);
+        if (!sent && schemaProblem) {
+          try {
+            const raw = await createJSON({ model: MODEL, max_tokens: 8000, system: TUTOR_SYSTEM, messages, effort, schema });
+            send(JSON.stringify(raw));
+          } catch (e2) {
+            console.error("tutor fallback error", e2);
+            send(STREAM_ERROR + friendlyError(e2).message);
+          }
+        } else {
+          console.error("tutor error", err);
+          send(STREAM_ERROR + friendlyError(err).message);
+        }
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "X-Accel-Buffering": "no" },
+  });
 }
