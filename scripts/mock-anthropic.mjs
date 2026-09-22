@@ -1,0 +1,64 @@
+// A tiny stand-in for the Anthropic Messages API, for testing the live code path
+// without a key. Run: node scripts/mock-anthropic.mjs [port] [logFile]
+// Then start the app with ANTHROPIC_API_KEY=test ANTHROPIC_BASE_URL=http://localhost:<port>
+import { createServer } from "node:http";
+import { appendFileSync } from "node:fs";
+
+const port = Number(process.argv[2] || 4010);
+const log = process.argv[3];
+const REJECT_SCHEMA_ONCE = process.env.MOCK_REJECT_SCHEMA === "1";
+let rejected = false;
+let turnNo = 0;
+
+const turns = [
+  {
+    say: "Hi! Let's look at this parabola together. Quick question first.",
+    phase: "diagnose",
+    board: [
+      { type: "write", id: "eq", text: "y = x² − 4x + 1", zone: "left", size: "lg", color: "ink" },
+      { type: "graph", id: "g1", zone: "right", xMin: -2, xMax: 6, yMin: -4, yMax: 6, xLabel: "x", yLabel: "y", text: "" },
+      { type: "plot", target: "g1", fn: "x^2-4x+1", items: [], text: "y", color: "blue" },
+    ],
+    question: "What does the vertex of a parabola mean to you?",
+    choices: ["The highest or lowest point", "Where it crosses the x-axis", "Not sure"],
+    gap: "", plan: [], step: 0, videos: [], practice: "", verdict: "none",
+  },
+  {
+    say: "Exactly. For y equals a x squared plus b x plus c, the vertex x-value is negative b over 2a.",
+    phase: "teach",
+    board: [
+      { type: "circle", target: "eq", match: "−4x", text: "b = −4", color: "red" },
+      { type: "note", id: "rule", text: "Vertex x = −b ÷ 2a", items: ["a = 1, b = −4"], zone: "left", color: "ink" },
+      { type: "point", target: "g1", x: 2, y: -3, text: "" },
+    ],
+    question: "What is −b ÷ 2a here?",
+    choices: [], gap: "Vertex formula x = −b/2a", plan: ["Find a and b", "Use −b/2a", "Plug in for y"], step: 1,
+    videos: [{ title: "Vertex of a parabola", query: "find vertex of parabola -b/2a" }], practice: "", verdict: "correct",
+  },
+];
+
+createServer((req, res) => {
+  let body = "";
+  req.on("data", (c) => (body += c));
+  req.on("end", () => {
+    const json = body ? JSON.parse(body) : {};
+    const hasFormat = Boolean(json.output_config?.format);
+    if (log) appendFileSync(log, JSON.stringify({ path: req.url, model: json.model, effort: json.output_config?.effort, hasFormat, nMessages: json.messages?.length, lastRole: json.messages?.at(-1)?.role }) + "\n");
+    if (REJECT_SCHEMA_ONCE && hasFormat && !rejected) {
+      rejected = true;
+      res.writeHead(400, { "content-type": "application/json" });
+      return res.end(JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: "Schema is too complex for compilation." } }));
+    }
+    const isExtract = /split it into problems|Transcribe and split/i.test(JSON.stringify(json.messages ?? []));
+    const payload = isExtract
+      ? { assignmentName: "Homework 5", problems: [{ title: "1. Solve 5x − 4 = 21", text: "1. Solve 5x − 4 = 21", subject: "Algebra" }] }
+      : turns[Math.min(turnNo++, turns.length - 1)];
+    const text = hasFormat ? JSON.stringify(payload) : "```json\n" + JSON.stringify(payload) + "\n```";
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({
+      id: "msg_mock", type: "message", role: "assistant", model: json.model,
+      content: [{ type: "text", text }], stop_reason: "end_turn", stop_sequence: null,
+      usage: { input_tokens: 10, output_tokens: 10 },
+    }));
+  });
+}).listen(port, () => console.log(`mock anthropic on :${port}`));
