@@ -52,26 +52,32 @@ const algebra: DemoAssignment = {
     script: [
       t({
         phase: "diagnose",
-        say: "Hi, I'm Teacher! Before we start, one quick question so I know where to begin. No wrong answers here.",
+        say: "",
         board: [
+          { type: "narrate", text: "Hi, I'm Teacher! I'll write your equation big, so we can mark it up together." },
           { type: "write", id: "eq1", text: "3x + 7 = 22", size: "lg" },
+          { type: "narrate", text: "Our goal is to get x all by itself, so I'm underlining the x." },
           { type: "underline", target: "eq1", match: "x", color: "blue", text: "goal: x alone" },
+          { type: "narrate", text: "Quick question so I know where to start: what would you undo first?" },
         ],
         question: "To get x by itself, what would you undo FIRST?",
         choices: ["Divide by 3 first", "Subtract 7 first", "I'm not sure"],
         expect: ["subtract 7", "minus 7", "−7", "-7"],
-        rightPrefix: "Nice instinct! Let's make sure you know why it works. ",
-        wrongPrefix: "Totally normal. That's exactly the idea we'll nail down. ",
+        rightPrefix: "Nice instinct! ",
+        wrongPrefix: "Totally normal, that's exactly what we'll sort out. ",
       }),
       t({
         phase: "teach",
         gap: "Inverse operations in reverse order (undo +7 before ÷3)",
         plan: ["Spot the layers", "Undo the + 7", "Undo the × 3", "Check it"],
         step: 0,
-        say: "Think of 3x plus 7 like a gift that got wrapped twice: first x was multiplied by 3, then 7 was added. To unwrap it, you undo the last thing first.",
+        say: "",
         board: [
+          { type: "narrate", text: "Think of 3x plus 7 as a gift wrapped twice. First x got multiplied by 3, so I circle the 3x in blue." },
           { type: "circle", target: "eq1", match: "3x", color: "blue", text: "1st: x × 3" },
+          { type: "narrate", text: "Then 7 was added on the outside. That's the outer layer, so it gets a red circle." },
           { type: "circle", target: "eq1", match: "+ 7", color: "red", text: "2nd: + 7" },
+          { type: "narrate", text: "You unwrap from the outside in, so the last layer comes off first. I'll put that rule on a sticky note." },
           { type: "note", id: "rule", zone: "right", text: "Unwrap in reverse", items: ["Wrapped: × 3, then + 7", "Unwrap: − 7, then ÷ 3"] },
         ],
         question: "So what should we do to BOTH sides first?",
@@ -85,9 +91,11 @@ const algebra: DemoAssignment = {
       t({
         phase: "teach",
         step: 1,
-        say: "Subtract 7 from both sides. An equation is like a balanced scale: whatever you do to one side, you do to the other.",
+        say: "",
         board: [
+          { type: "narrate", text: "I write minus 7 under BOTH sides, because an equation is a balance: whatever you do to one side, you do to the other." },
           { type: "balance", target: "eq1", text: "− 7" },
+          { type: "narrate", text: "On the left, plus 7 minus 7 cancels, so only 3x is left. The right side still needs 22 minus 7." },
           { type: "write", id: "eq2", text: "3x = __", size: "lg" },
           { type: "arrow", from: "eq1", to: "eq2", text: "− 7 both sides" },
         ],
@@ -95,16 +103,18 @@ const algebra: DemoAssignment = {
         choices: ["14", "15", "29"],
         expect: ["15"],
         hint: "Count down from 22 by 7: 21, 20, 19, 18, 17, 16...",
-        rightPrefix: "Exactly, 3x = 15. ",
-        wrongPrefix: "It's 15, so 3x = 15. ",
+        rightPrefix: "Exactly. ",
+        wrongPrefix: "It's 15. ",
       }),
       t({
         phase: "teach",
         step: 2,
-        say: "Now x is only being multiplied by 3. One layer left to unwrap.",
+        say: "",
         board: [
+          { type: "narrate", text: "I cross out the blank and write the new line: 3x equals 15." },
           { type: "strike", target: "eq2", match: "__" },
           { type: "write", id: "eq3", text: "3x = 15", size: "lg", color: "blue" },
+          { type: "narrate", text: "Only one layer is left now: x is being multiplied by 3. I circle it, because that's what we undo next." },
           { type: "circle", target: "eq3", match: "3x", color: "blue", text: "x × 3" },
         ],
         question: "What do we do to both sides now?",
@@ -117,9 +127,11 @@ const algebra: DemoAssignment = {
       t({
         phase: "check",
         step: 2,
-        say: "Divide both sides by 3. I'll let you finish this last step yourself.",
+        say: "",
         board: [
+          { type: "narrate", text: "Divide both sides by 3, because dividing undoes the times 3. I write it under both sides again." },
           { type: "balance", target: "eq3", text: "÷ 3" },
+          { type: "narrate", text: "The 3s on the left cancel, leaving x alone. You finish the right side." },
           { type: "write", id: "eq4", text: "x = ?", size: "lg" },
           { type: "askQuestion", text: "15 ÷ 3 = ?" },
         ],
@@ -133,10 +145,12 @@ const algebra: DemoAssignment = {
       t({
         phase: "check",
         step: 3,
-        say: "Let's prove it. Put 5 back into the original: 3 times 5 is 15, plus 7 is 22. Both sides match, so you're right.",
+        say: "",
         board: [
+          { type: "narrate", text: "Let's prove it. I plug 5 back into the very first equation." },
           { type: "divider" },
           { type: "write", id: "chk", text: "Check: 3(5) + 7 = 15 + 7 = 22 ✓", color: "green" },
+          { type: "narrate", text: "It comes out to 22, exactly the right side, so the answer works. That check is your safety net on every test." },
           { type: "underline", target: "chk", match: "22 ✓", color: "green" },
         ],
         question: "Ready to try a new one on your own?",
@@ -144,10 +158,12 @@ const algebra: DemoAssignment = {
       }),
       t({
         phase: "practice",
-        say: "Here's a new one. Same idea, different numbers: unwrap in reverse. Take your time.",
+        say: "",
         board: [
+          { type: "narrate", text: "Fresh board, fresh problem. Same idea, different numbers." },
           { type: "clear" },
           { type: "write", id: "pr", text: "4x − 9 = 23", size: "lg" },
+          { type: "narrate", text: "Here's your rule on a sticky note: undo the last thing first, and do it to both sides." },
           { type: "note", zone: "right", text: "Remember", items: ["Undo the LAST thing first", "Same move on both sides"] },
         ],
         practice: "Solve for x: 4x − 9 = 23",
@@ -165,8 +181,9 @@ const algebra: DemoAssignment = {
       t({
         phase: "wrapup",
         gap: "Inverse operations in reverse order (undo +7 before ÷3)",
-        say: "You solved it on your own. The gap today was the order of undoing: reverse whatever was done to x, last step first. You'll use that on every equation from here.",
+        say: "",
         board: [
+          { type: "narrate", text: "You solved that one completely on your own. Here's what to remember." },
           { type: "note", zone: "full", text: "Today's rule", items: ["Undo operations in REVERSE order", "Whatever you do to one side, do to the other", "Check by plugging your answer back in"] },
         ],
         question: "",
@@ -176,19 +193,185 @@ const algebra: DemoAssignment = {
     ],
     interrupts: {
       why: t({
-        say: "Great question. We undo the plus 7 first because it was the last thing done to x. It's like socks and shoes: you put socks on first, but you take shoes off first.",
-        board: [{ type: "note", zone: "right", text: "Socks & shoes", items: ["On: socks → shoes", "Off: shoes → socks", "x: ×3 → +7, so undo −7 → ÷3"] }],
+        say: "",
+        board: [
+          { type: "narrate", text: "Great question. We undo the plus 7 first because it was the last thing done to x. It's like socks and shoes: on goes socks, then shoes, but off comes shoes first." },
+          { type: "note", zone: "right", text: "Socks & shoes", items: ["On: socks → shoes", "Off: shoes → socks", "x: ×3 → +7, so undo −7 → ÷3"] },
+        ],
       }),
       differently: t({
-        say: "Let's picture it as marbles. Three bags each hold x marbles, plus 7 loose marbles, and that's 22 in total. Take away the 7 loose ones and only the bags are left.",
+        say: "",
         board: [
+          { type: "narrate", text: "Let's picture marbles. Three bags each hold x marbles, plus 7 loose ones, 22 in total." },
           { type: "box", id: "bags", zone: "left", text: "Marble picture", items: ["[x] [x] [x]  +  7 loose  =  22", "remove the 7 loose marbles…", "[x] [x] [x]  =  22 − 7"] },
+          { type: "narrate", text: "Take away the 7 loose ones, circled here, and only the bags are left." },
           { type: "circle", target: "bags.1", match: "7 loose", color: "red" },
         ],
       }),
       slower: t({
-        say: "No rush at all. Let's zoom in on just one piece: the plus 7 is stuck to the 3x. Our only job right now is to get rid of it.",
-        board: [{ type: "highlight", target: "eq1", match: "+ 7" }, { type: "write", text: "Step 1 only: get rid of the + 7", size: "sm", color: "purple" }],
+        say: "",
+        board: [
+          { type: "narrate", text: "No rush at all. Let's zoom in on one piece: the plus 7 stuck to the 3x. I'll highlight it." },
+          { type: "highlight", target: "eq1", match: "+ 7" },
+          { type: "narrate", text: "Our only job right now is to get rid of that plus 7." },
+          { type: "write", text: "Step 1 only: get rid of the + 7", size: "sm", color: "purple" },
+        ],
+      }),
+    },
+  },
+};
+
+// ---------------------------------------------------------------- Intervals
+const intervals: DemoAssignment = {
+  demoId: "intervals",
+  name: "MATH 110 · Intervals & Set Notation",
+  blurb: "Number lines, ∩ and ∪, open vs closed endpoints",
+  emoji: "∩",
+  problems: [
+    {
+      id: "p1",
+      title: "1. Find I ∩ J and I ∪ J",
+      text: "1. Let I = (0, 3] and J = (−3, 2). Find I ∩ J and I ∪ J, and show both on a number line.",
+      subject: "Algebra",
+    },
+    { id: "p2", title: "2. Inequality to interval notation", text: "2. Write −2 ≤ x < 5 in interval notation.", subject: "Algebra" },
+    { id: "p3", title: "3. Intersect two rays", text: "3. Find A ∩ B where A = (−∞, 4] and B = (1, ∞).", subject: "Algebra" },
+  ],
+  lesson: {
+    problemId: "p1",
+    script: [
+      t({
+        phase: "diagnose",
+        say: "",
+        board: [
+          { type: "narrate", text: "Hey! I'll write your two sets up top, so we can keep looking back at them." },
+          { type: "write", id: "i", text: "I = (0, 3]", size: "lg", color: "blue" },
+          { type: "write", id: "j", text: "J = (−3, 2)", size: "lg", color: "orange" },
+          { type: "narrate", text: "Where does this one get confusing for you?" },
+        ],
+        question: "Where are you stuck?",
+        choices: ["I don't know what ∩ and ∪ mean", "I mix up ( and ]", "Can you check my answer?"],
+      }),
+      t({
+        phase: "teach",
+        gap: "∩ = the overlap, ∪ = everything; each endpoint follows its own bracket",
+        plan: ["Draw I and J", "∩ = the overlap", "∪ = everything"],
+        step: 0,
+        say: "",
+        board: [
+          { type: "narrate", text: "Let's draw a number line from −4 to 4, so both sets fit on it." },
+          { type: "numberLine", id: "nl", zone: "full", xMin: -4, xMax: 4, text: "", items: [] },
+          { type: "narrate", text: "I runs from 0 to 3, so I draw a blue bar between them." },
+          { type: "interval", target: "nl", text: "I: (0, 3]", color: "blue" },
+          { type: "narrate", text: "The round bracket means 0 is NOT in I, so that circle stays hollow. The square bracket means 3 IS in, so I fill it in." },
+          { type: "arrow", from: "i:(", to: "nl.1.lo", color: "blue" },
+          { type: "arrow", from: "i:]", to: "nl.1.hi", color: "blue" },
+          { type: "narrate", text: "J goes from −3 to 2, with round brackets on both ends: orange bar, two hollow circles." },
+          { type: "interval", target: "nl", text: "J: (−3, 2)", color: "orange" },
+          { type: "narrate", text: "Now you read the picture: where do the blue and orange bars overlap?" },
+        ],
+        question: "Your turn: the bars overlap from ___ to ___?",
+        choices: [],
+        expect: ["0to2", "0and2", "(0,2)", "0-2", "0through2"],
+        hint: "Look straight down from each bar. Blue starts at 0 and orange stops at 2. So the part in both runs from… to…?",
+        hintBoard: [
+          { type: "circle", target: "nl.1.lo", color: "red" },
+          { type: "circle", target: "nl.2.hi", color: "red" },
+        ],
+        rightPrefix: "Exactly, 0 to 2. ",
+        wrongPrefix: "It's from 0 to 2. ",
+      }),
+      t({
+        phase: "teach",
+        step: 1,
+        say: "",
+        board: [
+          { type: "narrate", text: "That overlap is I ∩ J, because ∩ means in BOTH sets. I'll draw it as a green row." },
+          { type: "interval", target: "nl", text: "I ∩ J: (0, 2)", color: "green" },
+          { type: "narrate", text: "Both ends stay open: 0 is missing from I, and 2 is missing from J. To be in the intersection, a number has to be in both." },
+          { type: "circle", target: "nl.3.lo", color: "red", text: "not in I" },
+          { type: "circle", target: "nl.3.hi", color: "red", text: "not in J" },
+          { type: "narrate", text: "So I ∩ J is (0, 2). Now you do the union. ∪ means in EITHER set. What's I ∪ J?" },
+          { type: "write", id: "ans1", text: "I ∩ J = (0, 2)", size: "lg", color: "green" },
+        ],
+        question: "Your turn: what is I ∪ J? (watch the brackets on each end)",
+        choices: [],
+        expect: ["(-3,3]"],
+        hint: "Go from the far left of ANY bar to the far right of ANY bar. Is −3 in either set? Is 3?",
+        hintBoard: [
+          { type: "circle", target: "nl.2.lo", color: "red" },
+          { type: "circle", target: "nl.1.hi", color: "red" },
+        ],
+        rightPrefix: "Yes! ",
+        wrongPrefix: "It's (−3, 3]. ",
+      }),
+      t({
+        phase: "check",
+        step: 2,
+        say: "",
+        board: [
+          { type: "narrate", text: "It starts open at −3, because −3 isn't in I or J. It ends closed at 3, because 3 is in I." },
+          { type: "write", id: "ans2", text: "I ∪ J = (−3, 3]  ✓", size: "lg", color: "green" },
+          { type: "narrate", text: "That's the whole problem, done by you. Ready to try a fresh one alone?" },
+          { type: "underline", target: "ans2", match: "(−3, 3]", color: "green" },
+        ],
+        question: "Ready for one on your own?",
+        choices: ["Yes, let's go"],
+      }),
+      t({
+        phase: "practice",
+        say: "",
+        board: [
+          { type: "narrate", text: "New sets on a clean board. Same moves: picture them, find the overlap, then everything." },
+          { type: "clear" },
+          { type: "write", id: "a", text: "A = [1, 5)", size: "lg", color: "blue" },
+          { type: "write", id: "b", text: "B = (3, 8]", size: "lg", color: "orange" },
+          { type: "narrate", text: "Remember: ∩ is where they overlap, and each end follows its own bracket." },
+          { type: "note", zone: "right", text: "Remember", items: ["∩ = in BOTH (overlap)", "∪ = in EITHER (everything)", "Check each end's bracket"] },
+        ],
+        practice: "A = [1, 5), B = (3, 8]. Find A ∩ B (and A ∪ B if you want a bonus).",
+        question: "What is A ∩ B?",
+        choices: [],
+        expect: ["(3,5)"],
+        hint: "Picture it: A stops just before 5, B starts just after 3. The overlap is between 3 and 5. Are those ends open or closed?",
+        hintBoard: [{ type: "numberLine", id: "nl2", zone: "full", xMin: 0, xMax: 9, text: "", items: ["A: [1, 5)", "B: (3, 8]"] }],
+        rightPrefix: "Perfect, (3, 5)! ",
+        wrongPrefix: "It's (3, 5): both ends open, because 5 isn't in A and 3 isn't in B. ",
+      }),
+      t({
+        phase: "wrapup",
+        gap: "∩ = the overlap, ∪ = everything; each endpoint follows its own bracket",
+        say: "",
+        board: [
+          { type: "narrate", text: "Draw the number line first and these almost solve themselves. Here's the whole idea on one note." },
+          { type: "note", zone: "full", text: "Today's rule", items: ["∩ means the overlap (in BOTH)", "∪ means everything (in EITHER)", "Each endpoint follows its own bracket: ( open, ] closed"] },
+        ],
+        question: "",
+        choices: [],
+        videos: [{ title: "Intersection and union of intervals", query: "intersection and union of intervals number line" }],
+      }),
+    ],
+    interrupts: {
+      why: t({
+        say: "",
+        board: [
+          { type: "narrate", text: "Good question! We draw it because the picture shows the overlap instantly, instead of juggling brackets in your head." },
+          { type: "note", zone: "right", text: "Why draw it?", items: ["Overlap = where bars stack", "Hollow ○ = not included", "Filled ● = included"] },
+        ],
+      }),
+      differently: t({
+        say: "",
+        board: [
+          { type: "narrate", text: "Think of two friends' free time. I is free from 0 to 3, J from −3 to 2. A meeting only works when BOTH are free: that's ∩." },
+          { type: "box", zone: "left", text: "Free-time version", items: ["I free: 0 → 3 (can stay until 3)", "J free: −3 → 2 (must leave before 2)", "Both free (∩): 0 → 2", "Either free (∪): −3 → 3"] },
+        ],
+      }),
+      slower: t({
+        say: "",
+        board: [
+          { type: "narrate", text: "Let's slow down and look at just one thing: the blue bar. It covers everything from 0 up to 3." },
+          { type: "highlight", target: "i" },
+        ],
       }),
     },
   },
@@ -629,7 +812,7 @@ const economics: DemoAssignment = {
   },
 };
 
-export const DEMO_ASSIGNMENTS: DemoAssignment[] = [algebra, accounting, chemistry, economics];
+export const DEMO_ASSIGNMENTS: DemoAssignment[] = [algebra, intervals, accounting, chemistry, economics];
 
 export function getDemo(id: string | undefined): DemoAssignment | undefined {
   return DEMO_ASSIGNMENTS.find((d) => d.demoId === id);

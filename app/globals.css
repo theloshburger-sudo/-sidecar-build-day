@@ -545,7 +545,7 @@ h3 {
 }
 .demo-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 14px;
 }
 .demo-card {
@@ -1464,3 +1464,4 @@ h3 {
 
 .icon-btn--wide { width: auto; padding: 0 12px; font-size: 13px; font-weight: 700; white-space: nowrap; }
 .icon-btn--live { background: #e6f8ee; border-color: #9fdcb8; color: #0f7a3d; box-shadow: 0 0 0 3px rgba(18, 161, 80, 0.12); animation: rec 1.6s ease-in-out infinite; }
+.demo-emoji--intervals { background: #e6f8ee; color: #0f7a3d; }
