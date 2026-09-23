@@ -55,6 +55,22 @@ type El =
   | { kind: "text"; text: string; lines: Line[]; box: Box; label: string }
   | { kind: "block"; box: Box; children: string[]; label: string }
   | {
+      /** A number line that intervals can be added to, one row at a time. */
+      kind: "nline";
+      box: Box;
+      x0: number;
+      x1: number;
+      lo: number;
+      hi: number;
+      axisY: number;
+      rowsTop: number;
+      rowH: number;
+      slots: number;
+      rows: string[];
+      labelX: number;
+      label: string;
+    }
+  | {
       kind: "graph";
       box: Box;
       plot: Box;
@@ -377,6 +393,10 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
         return;
       }
     }
+    if (!hit.line) {
+      placeLabel(label, [hit.box.x + hit.box.w, hit.box.y + 2], color, { x: 20, y: 0, w: BOARD_W - 40, h: 99999 });
+      return;
+    }
     // No room beside the line: tuck it under the mark and make room below.
     const x = Math.min(Math.max(hit.box.x, 20), right - w);
     const y = hit.box.y + hit.box.h + size + 6;
@@ -393,6 +413,42 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
     g.plot.x + ((x - g.xMin) / (g.xMax - g.xMin)) * g.plot.w,
     g.plot.y + g.plot.h - ((y - g.yMin) / (g.yMax - g.yMin)) * g.plot.h,
   ];
+
+  /** Add one interval row to a number line: name, bar, guides to the axis, then open/closed endpoints. */
+  const drawInterval = (nlId: string, raw: string, color: InkColor | undefined) => {
+    const nl = s.els[nlId];
+    if (!nl || nl.kind !== "nline") return;
+    const iv = parseInterval(raw);
+    if (!iv || nl.rows.length >= nl.slots) return;
+    const n = nl.rows.length + 1;
+    const palette: InkColor[] = ["blue", "orange", "green", "purple", "red"];
+    const c = INK[color ?? palette[(n - 1) % palette.length]];
+    const X = (v: number) => nl.x0 + ((Math.max(nl.lo, Math.min(nl.hi, v)) - nl.lo) / (nl.hi - nl.lo)) * (nl.x1 - nl.x0);
+    const y = nl.rowsTop + (n - 1) * nl.rowH + nl.rowH / 2;
+    const a0 = Number.isFinite(iv.lo) ? X(iv.lo) : nl.x0 - 26;
+    const a1 = Number.isFinite(iv.hi) ? X(iv.hi) : nl.x1 + 4;
+    const name = iv.name || `#${n}`;
+    let ns = FONT.sm;
+    while (ns > 13 && measure(name, ns) > nl.x0 - nl.labelX - 40) ns -= 1;
+    const nameW = addText(name, nl.labelX, y + 7, ns, c, true);
+    register(`${nlId}.${n}`, { kind: "text", text: name, lines: [{ text: name, x: nl.labelX, y: y + 7, size: ns, start: 0 }], box: { x: nl.labelX, y: y - 14, w: nameW, h: 24 }, label: raw }, "t");
+    const bar: Pt[][] = [handLine([a0, y], [a1, y], rand, 0.4)];
+    if (!Number.isFinite(iv.lo)) bar.push(...arrowHead([a0 - 4, y], [a1, y], 11));
+    if (!Number.isFinite(iv.hi)) bar.push(...arrowHead([a1 + 4, y], [a0, y], 11));
+    addPath(bar, c, 6);
+    register(`${nlId}.${n}.bar`, { kind: "block", box: { x: a0, y: y - 8, w: a1 - a0, h: 16 }, children: [], label: `bar ${raw}` }, "t");
+    const drops: Pt[][] = [];
+    for (const [v, xx] of [[iv.lo, a0], [iv.hi, a1]] as const) if (Number.isFinite(v)) drops.push([[xx, y + 8], [xx, nl.axisY - 2]]);
+    if (drops.length) addPath(drops, c, 1.4, { dashed: true, dur: 150 });
+    for (const [end, v, xx, closed] of [["lo", iv.lo, a0, iv.loClosed], ["hi", iv.hi, a1, iv.hiClosed]] as const) {
+      if (!Number.isFinite(v)) continue;
+      const ring: Pt[] = [];
+      for (let k = 0; k <= 16; k++) ring.push([xx + Math.cos((k / 16) * Math.PI * 2) * 7.5, y + Math.sin((k / 16) * Math.PI * 2) * 7.5]);
+      addPath([ring], c, 3, { fill: closed ? c : "#ffffff", dur: 260 });
+      register(`${nlId}.${n}.${end}`, { kind: "block", box: { x: xx - 9, y: y - 9, w: 18, h: 18 }, children: [], label: `${closed ? "closed" : "open"} endpoint at ${fmt(v)}` }, "t");
+    }
+    s.els[nlId] = { ...nl, rows: [...nl.rows, raw] };
+  };
 
   for (const a of actions) {
     if (a.type !== "tAccount") s.row = null;
@@ -490,8 +546,15 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
       }
 
       case "arrow": {
-        const fromEl = locate(a.from, undefined)?.box;
-        const toEl = locate(a.to, undefined)?.box;
+        // "eq1:]" points at the "]" inside eq1.
+        const ref = (r: string | undefined): [string | undefined, string | undefined] => {
+          if (!r) return [r, undefined];
+          if (s.els[r]) return [r, undefined];
+          const i = r.indexOf(":");
+          return i > 0 && s.els[r.slice(0, i)] ? [r.slice(0, i), r.slice(i + 1)] : [r, undefined];
+        };
+        const fromEl = locate(...ref(a.from))?.box;
+        const toEl = locate(...ref(a.to))?.box;
         if (!fromEl || !toEl) break;
         const color = colorOf(a.color, "blue");
         const overlapX = Math.min(fromEl.x + fromEl.w, toEl.x + toEl.w) - Math.max(fromEl.x, toEl.x) > 0;
@@ -542,6 +605,13 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
           p0 = [Math.min(rx, fromEl.x + fromEl.w + 12), fromEl.y + fromEl.h / 2];
           p1 = [Math.min(rx, toEl.x + toEl.w + 12), toEl.y + toEl.h / 2];
           c = [Math.min(rx + 70, BOARD_W - 6), (p0[1] + p1[1]) / 2];
+        } else if (Math.abs(toEl.y + toEl.h / 2 - (fromEl.y + fromEl.h / 2)) > 40) {
+          // Mostly a vertical connection (e.g. a bracket up top to a dot on the number line):
+          // leave from the bottom/top, run across, then drop onto the target like a teacher's arrow.
+          const down = toEl.y > fromEl.y;
+          p0 = [fromEl.x + fromEl.w / 2, down ? fromEl.y + fromEl.h + 4 : fromEl.y - 4];
+          p1 = [toEl.x + toEl.w / 2, down ? toEl.y - 6 : toEl.y + toEl.h + 6];
+          c = [p1[0], p0[1]];
         } else {
           const leftToRight = toEl.x > fromEl.x;
           p0 = [leftToRight ? fromEl.x + fromEl.w + 8 : fromEl.x - 8, fromEl.y + fromEl.h / 2];
@@ -849,26 +919,25 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
         const zone = zoneOf(a.zone, "full");
         const z = ZONES[zone];
         const raw = list(a.items).slice(0, 5).map(String);
-        const parsed = raw.map(parseInterval).filter((v): v is NonNullable<ReturnType<typeof parseInterval>> => !!v);
-        if (!parsed.length) break;
-        const finite = parsed.flatMap((iv) => [iv.lo, iv.hi]).filter(Number.isFinite);
-        let lo = Number.isFinite(a.xMin) ? a.xMin! : Math.min(...finite, 0) - 1;
-        let hi = Number.isFinite(a.xMax) ? a.xMax! : Math.max(...finite, 0) + 1;
+        const parsed = raw.map(parseInterval);
+        const finite = parsed.flatMap((iv) => (iv ? [iv.lo, iv.hi] : [])).filter(Number.isFinite);
+        let lo = Number.isFinite(a.xMin) ? a.xMin! : finite.length ? Math.min(...finite, 0) - 1 : -5;
+        let hi = Number.isFinite(a.xMax) ? a.xMax! : finite.length ? Math.max(...finite, 0) + 1 : 5;
         if (hi <= lo) [lo, hi] = [lo - 5, lo + 5];
         let top = topOf(zone) + 6;
         if (text) {
           addText(text, z.x, top + FONT.sm, FONT.sm, INK.ink, true);
           top += FONT.sm * 1.6;
         }
-        const x0 = z.x + 90;
+        const x0 = z.x + 110;
         const x1 = z.x + z.w - 20;
-        const X = (v: number) => x0 + ((Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo)) * (x1 - x0);
         const rowH = 40;
-        const axisY = top + 20 + parsed.length * rowH;
-        const palette: InkColor[] = ["blue", "orange", "green", "purple", "red"];
+        // Reserve room for intervals added later (e.g. the answer row), one per slot.
+        const slots = Math.min(5, Math.max(3, raw.length));
+        const rowsTop = top + 14;
+        const axisY = rowsTop + slots * rowH + 6;
+        const X = (v: number) => x0 + ((Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo)) * (x1 - x0);
         const nlId = (a.id || "").trim() || `nl${s.seq + 1}`;
-        const children: string[] = [];
-        // axis + ticks
         addPath([handLine([x0 - 30, axisY], [x1 + 8, axisY], rand, 0.5), ...arrowHead([x1 + 12, axisY], [x0, axisY], 11), ...arrowHead([x0 - 34, axisY], [x1, axisY], 11)], INK.ink, 2.6);
         const step = niceStep(hi - lo);
         const ticks: Pt[][] = [];
@@ -879,34 +948,35 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
           prims.push({ kind: "text", key: key(), x: X(v) - lw / 2, y: axisY + 28, text: label, size: 17, color: INK.muted, w: lw, dur: 50 });
         }
         addPath(ticks, INK.ink, 2, { dur: 200 });
-        parsed.forEach((iv, i) => {
-          const color = INK[palette[i % palette.length]];
-          const y = top + 20 + i * rowH + rowH / 2;
-          const a0 = Number.isFinite(iv.lo) ? X(iv.lo) : x0 - 26;
-          const a1 = Number.isFinite(iv.hi) ? X(iv.hi) : x1 + 4;
-          const name = iv.name || `#${i + 1}`;
-          const nameW = addText(name, z.x, y + 7, FONT.sm, color, true);
-          const cid = register(`${nlId}.${i + 1}`, { kind: "text", text: name, lines: [{ text: name, x: z.x, y: y + 7, size: FONT.sm, start: 0 }], box: { x: z.x, y: y - 14, w: nameW, h: 24 }, label: raw[i] }, "t");
-          children.push(cid);
-          const bar: Pt[][] = [handLine([a0, y], [a1, y], rand, 0.4)];
-          if (!Number.isFinite(iv.lo)) bar.push(...arrowHead([a0 - 4, y], [a1, y], 11));
-          if (!Number.isFinite(iv.hi)) bar.push(...arrowHead([a1 + 4, y], [a0, y], 11));
-          addPath(bar, color, 6);
-          // dashed drops to the axis so endpoints line up with the numbers
-          const drops: Pt[][] = [];
-          for (const [v, xx] of [[iv.lo, a0], [iv.hi, a1]] as const) if (Number.isFinite(v)) drops.push([[xx, y + 8], [xx, axisY - 2]]);
-          if (drops.length) addPath(drops, color, 1.4, { dashed: true, dur: 150 });
-          for (const [v, xx, closed] of [[iv.lo, a0, iv.loClosed], [iv.hi, a1, iv.hiClosed]] as const) {
-            if (!Number.isFinite(v)) continue;
-            const ring: Pt[] = [];
-            for (let k = 0; k <= 16; k++) ring.push([xx + Math.cos((k / 16) * Math.PI * 2) * 7.5, y + Math.sin((k / 16) * Math.PI * 2) * 7.5]);
-            addPath([ring], color, 3, { fill: closed ? color : "#ffffff", dur: 160 });
-          }
-        });
         const legend = "● included   ○ not included";
         addText(legend, x1 - measure(legend, 16), axisY + 52, 16, INK.muted, false, true);
-        register(nlId, { kind: "block", box: { x: z.x, y: top, w: z.w, h: axisY + 56 - top }, children, label: `number line ${raw.join(" ; ")}` }, "nl");
+        const nl: Extract<El, { kind: "nline" }> = {
+          kind: "nline",
+          box: { x: z.x, y: top, w: z.w, h: axisY + 56 - top },
+          x0,
+          x1,
+          lo,
+          hi,
+          axisY,
+          rowsTop,
+          rowH,
+          slots,
+          rows: [],
+          labelX: z.x,
+          label: "",
+        };
+        register(nlId, nl, "nl");
         advance(zone, axisY + 58);
+        raw.forEach((r, i) => {
+          if (parsed[i]) drawInterval(nlId, r, undefined);
+        });
+        break;
+      }
+
+      case "interval": {
+        const target = a.target && s.els[a.target]?.kind === "nline" ? a.target : [...s.order].reverse().find((id) => s.els[id]?.kind === "nline");
+        if (!target || !text) break;
+        drawInterval(target, text, a.color && a.color !== "ink" ? a.color : undefined);
         break;
       }
 
@@ -1014,6 +1084,10 @@ export function describeBoard(s: BoardState): string {
     if (id.includes(".") && !/\.title$/.test(id)) continue; // children are implied by their parent
     if (el.kind === "text") lines.push(`- ${id}: "${el.text.slice(0, 80)}"`);
     else if (el.kind === "graph") lines.push(`- ${id}: ${el.label}`);
+    else if (el.kind === "nline")
+      lines.push(
+        `- ${id}: number line ${fmt(el.lo)}..${fmt(el.hi)}; rows ${el.rows.map((r, i) => `${i + 1} = ${r}`).join(", ") || "(none yet)"}; ${el.slots - el.rows.length} free row(s). Endpoints: ${id}.<row>.lo / .hi, bars: ${id}.<row>.bar`,
+      );
     else lines.push(`- ${id}: ${el.label}`);
   }
   const used = Math.max(s.cursor.left, s.cursor.right);

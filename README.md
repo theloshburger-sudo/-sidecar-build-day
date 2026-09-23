@@ -73,13 +73,13 @@ Every `git push` redeploys automatically after that.
 
 ## The 3-minute demo script
 
-1. **Home** (15s): "Every week I get stuck on *one* problem, and a video or ChatGPT either lectures me on the whole chapter or just gives me the answer." Drop a real PDF, or click **Algebra I**.
-2. **Pick** (15s): Tap *Solve 3x + 7 = 22*, choose **Draw it out**, and turn on **Teacher talks out loud**.
-3. **Diagnose** (30s): Teacher writes the equation and asks what to undo first. Pick **Divide by 3 first** (the wrong answer on purpose) to show Teacher treat it as the gap, without judging.
-4. **Teach + interrupt** (60s): While it's drawing, click **Why?** or type *"why do we subtract first?"*. The drawing stops, and Teacher answers with the socks-and-shoes analogy, then goes back to the question. Then click **Show it differently**.
-5. **Solo problem** (30s): Answer the steps, then solve *4x − 9 = 23* on your own. Type a wrong answer first to show the hint, then **8**.
-6. **Wrap** (15s): Show the recap, **Save my recap**, and the home screen's "What you've cracked lately".
-7. Optional: click **Focus**, or switch to the **Economics** sample to show graphs drawing live.
+1. **Home** (15s): "Every week I get stuck on *one* problem. Videos lecture the whole chapter; ChatGPT just gives me the answer." Click **MATH 110 · Intervals & Set Notation** (this was my real homework) or drop your own PDF.
+2. **Pick** (15s): Tap *Find I ∩ J and I ∪ J*, turn on **Teacher talks out loud**, and leave drawing speed on **Auto** so the voice and the marker stay in step.
+3. **Where are you stuck?** (15s): Tap *"I don't know what ∩ and ∪ mean"*. No quiz, straight to help.
+4. **Teacher thinks out loud while drawing** (60s): It draws the number line, then says *"I runs from 0 to 3, so I draw a blue bar"* while drawing it. Arrows go from the `(` and `]` down to the hollow and filled dots, with the reason spoken ("round bracket means 0 isn't included…").
+5. **You do the thinking** (45s): Type a wrong overlap first (e.g. "0 to 1") to show the hint (the endpoints get circled), then "from 0 to 2". Teacher draws **I ∩ J** as a green row and hands you **I ∪ J**: type `(-3, 3]`. Click **Why?** at any point to show an interruption.
+6. **Solo problem + wrap** (30s): Solve A ∩ B = `(3, 5)` on your own, then show the recap and **Save my recap**.
+7. Optional: click ✍️ **Draw** and circle something on the board to show Teacher can see your ink (live AI).
 
 **Backup plan:** if the Wi-Fi dies, the samples still run. The pill says **Offline demo**, and the ★ lessons need no network. On a live deployment you can also force it with the "Use the offline scripted lesson" toggle on the pick screen.
 

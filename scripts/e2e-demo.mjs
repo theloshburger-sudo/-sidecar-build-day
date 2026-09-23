@@ -10,7 +10,7 @@ page.on("console", (m) => m.type() === "error" && errors.push("console: " + m.te
 await page.goto("http://localhost:3000");
 await page.waitForTimeout(800);
 await page.screenshot({ path: `${SP}/01-home.png`, fullPage: true });
-const btn = { Algebra: /Algebra/, Accounting: /ACCT/, Chemistry: /CHEM/, Economics: /ECON/ }[demo];
+const btn = { Intervals: /Intervals/, Algebra: /Algebra/, Accounting: /ACCT/, Chemistry: /CHEM/, Economics: /ECON/ }[demo];
 await page.getByRole("button", { name: btn }).first().click();
 await page.waitForTimeout(400);
 await page.screenshot({ path: `${SP}/02-pick-${demo}.png` });
@@ -19,7 +19,8 @@ await page.getByRole("button", { name: /Start with Teacher/ }).click();
 await page.waitForTimeout(5000);
 await page.screenshot({ path: `${SP}/03-session-${demo}.png` });
 // answer through the script: click the first choice that isn't "not sure", or type answers
-const answers = { Algebra: ["Subtract 7 first", "Why did we subtract first?", "Subtract 7", "15", "Divide by 3", "5", "Yes, let's go", "8"],
+const answers = { Intervals: ["I don't know what ∩ and ∪ mean", "0 to 1", "from 0 to 2", "Why do we draw it?", "(-3, 3]", "Yes, let's go", "(3, 5)"],
+  Algebra: ["Subtract 7 first", "Why did we subtract first?", "Subtract 7", "15", "Divide by 3", "5", "Yes, let's go", "8"],
   Accounting: ["An asset (Prepaid Insurance)", "3 months", "Show it differently", "$3,000", "Insurance Expense", "$9,000", "1600"],
   Chemistry: ["Moles (particle counts)", "2.0 mol", "2.0 mol", "36", "90", "88"],
   Economics: ["Buyers want exactly what sellers offer", "10 = 2 + Q", "8", "6", "Both rise", "5"] }[demo];

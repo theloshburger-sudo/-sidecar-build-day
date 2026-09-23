@@ -33,6 +33,7 @@ export const boardActionSchema = {
     variant("tAccount", { id: str, text: str, debits: strArr, credits: strArr }),
     variant("timeline", { id: str, text: str, items: strArr }),
     variant("numberLine", { id: str, zone, xMin: num, xMax: num, text: str, items: strArr }),
+    variant("interval", { target: str, text: str, color }),
     variant("narrate", { text: str }),
     variant("clear", {}),
   ],

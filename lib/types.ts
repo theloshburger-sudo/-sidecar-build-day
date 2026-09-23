@@ -24,6 +24,7 @@ export type BoardActionType =
   | "tAccount"
   | "timeline"
   | "numberLine"
+  | "interval"
   | "narrate"
   | "askQuestion"
   | "clear";

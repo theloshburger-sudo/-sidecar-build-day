@@ -110,3 +110,23 @@ test("point labels on the same spot don't overlap", () => {
   const overlap = a.x < b.x + b.w && a.x + a.w > b.x && Math.abs(a.y - b.y) < 20;
   assert.ok(!overlap);
 });
+
+test("number lines build row by row, with addressable endpoints and symbol-to-dot arrows", () => {
+  const r = applyActions(emptyBoard(), [
+    { type: "write", id: "i", text: "I = (0, 3]", size: "lg" },
+    { type: "numberLine", id: "nl", items: [], xMin: -4, xMax: 4, text: "" },
+    { type: "interval", target: "nl", text: "I: (0, 3]", color: "blue" },
+    { type: "interval", target: "nl", text: "J: (−3, 2)", color: "orange" },
+    { type: "arrow", from: "i:(", to: "nl.1.lo" },
+    { type: "arrow", from: "i:]", to: "nl.1.hi" },
+    { type: "circle", target: "nl.2.hi", text: "not in J" },
+  ]);
+  for (const id of ["nl.1.lo", "nl.1.hi", "nl.1.bar", "nl.2.lo", "nl.2.hi"]) assert.ok(r.state.els[id], id);
+  const arrows = r.prims.filter((p) => p.kind === "path").slice(-3, -1) as { paths: [number, number][][] }[];
+  assert.notEqual(Math.round(arrows[0].paths[0][0][0]), Math.round(arrows[1].paths[0][0][0]));
+  assert.match(describeBoard(r.state), /rows 1 = I: \(0, 3\], 2 = J/);
+});
+
+test("interval without a number line is ignored safely", () => {
+  assert.doesNotThrow(() => applyActions(emptyBoard(), [{ type: "interval", target: "nope", text: "(0, 1)" }]));
+});

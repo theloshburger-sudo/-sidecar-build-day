@@ -161,7 +161,7 @@ export default function Session({
       wb.current?.enqueue(res.prims);
       await wb.current?.whenIdle();
       // Give the reader a moment on beats that are mostly talk.
-      if (beat.text && alive()) await new Promise((r) => setTimeout(r, Math.min(1400, 250 + beat.text.split(" ").length * 45)));
+      if (beat.text && alive()) await new Promise((r) => setTimeout(r, Math.min(700, 120 + beat.text.split(" ").length * 25)));
     }
   }, []);
 

@@ -9,11 +9,25 @@ export interface DemoState {
   wrong: number;
 }
 
-function toTurn(d: DemoTurn, extra: Partial<TutorTurn> = {}): TutorTurn {
+function toTurn(d: DemoTurn, extra: Partial<TutorTurn> = {}, prefix = "", suffix = ""): TutorTurn {
+  let board = d.board ?? [];
+  let say = `${prefix}${d.say}${suffix}`;
+  const narrates = board.filter((a) => a.type === "narrate");
+  if (narrates.length) {
+    // Narrated lessons: the "Nice!"/"Not quite" prefix is spoken first, the "back to our question" last.
+    const first = board.indexOf(narrates[0]);
+    const last = board.lastIndexOf(narrates[narrates.length - 1]);
+    board = board.map((a, i) => {
+      if (i !== first && i !== last) return a;
+      let t = String(a.text ?? "");
+      if (i === first) t = `${prefix}${t}`;
+      if (i === last) t = `${t}${suffix}`;
+      return { ...a, text: t };
+    });
+    say = board.filter((a) => a.type === "narrate").map((a) => String(a.text)).join(" ");
+  }
   return {
-    say: d.say,
     phase: d.phase ?? "teach",
-    board: d.board ?? [],
     question: d.question ?? "",
     choices: d.choices ?? [],
     gap: d.gap ?? "",
@@ -23,6 +37,8 @@ function toTurn(d: DemoTurn, extra: Partial<TutorTurn> = {}): TutorTurn {
     practice: d.practice ?? "",
     verdict: "none",
     ...extra,
+    board,
+    say,
   };
 }
 
@@ -81,7 +97,7 @@ export function demoReply(lesson: DemoLesson, state: DemoState, text: string): {
   const advance = (verdict: Verdict, prefix = "") => {
     const next = script[state.idx + 1];
     return {
-      turn: toTurn(next, { say: `${prefix}${next.say}`, verdict }),
+      turn: toTurn(next, { verdict }, prefix),
       state: { idx: state.idx + 1, wrong: 0 },
     };
   };
@@ -96,12 +112,11 @@ export function demoReply(lesson: DemoLesson, state: DemoState, text: string): {
     const back = cur.question ? ` Now, back to our question: ${cur.question}` : "";
     return {
       turn: toTurn(it, {
-        say: `${it.say}${back}`,
         phase: cur.phase ?? "teach",
         question: cur.question ?? "",
         choices: cur.choices ?? [],
         step: cur.step ?? 0,
-      }),
+      }, "", back),
       state,
     };
   }
