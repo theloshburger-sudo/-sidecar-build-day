@@ -8,7 +8,7 @@ import VideoCards from "./VideoCards";
 import MathText from "./MathText";
 import { RECAPS_KEY, loadRecaps } from "./Home";
 import type { AppStatus, Engine } from "./SidecarApp";
-import { applyActions, boardHeight, describeBoard, emptyBoard, primsBox, BOARD_MIN_H, type BoardState, type Measure } from "@/lib/board";
+import { applyActions, badgeSpot, boardHeight, describeBoard, emptyBoard, primsBox, BOARD_MIN_H, type BoardState, type Measure } from "@/lib/board";
 import { getDemo } from "@/lib/demo";
 import { demoReply, demoStart, type DemoState } from "@/lib/demo-engine";
 import { createRecognizer, isEcho, prefetchVoice, speakAsync, speechRecognitionSupported, stopSpeaking, ttsSupported } from "@/lib/speech";
@@ -160,7 +160,9 @@ export default function Session({
     const bb = primsBox(drawn);
     setTags((t) => {
       const kept = clearAt >= 0 ? [] : t;
-      return bb && beat.text ? [...kept, { n, uid, x: Math.max(16, bb.x - 22), y: Math.max(16, bb.y + 10) }] : kept;
+      if (!bb || !beat.text) return kept;
+      const spot = badgeSpot(res.state, bb, kept);
+      return [...kept, { n, uid, x: spot.x, y: spot.y }];
     });
     setFocusBeat(uid);
     const p = prefsRef.current;
