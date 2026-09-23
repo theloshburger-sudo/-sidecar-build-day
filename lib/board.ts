@@ -44,6 +44,39 @@ export type Prim =
   | { kind: "fill"; beat?: number; key: string; x: number; y: number; w: number; h: number; color: string; opacity: number; dur: number }
   | { kind: "clear"; key: string; dur: number };
 
+/**
+ * Where to put a small numbered badge for something drawn at `bb` without covering any writing:
+ * try left, above, right and below it, then fall back to the empty left margin.
+ */
+export function badgeSpot(state: BoardState, bb: Box, taken: { x: number; y: number }[] = [], r = 13): { x: number; y: number } {
+  const blockers: Box[] = [];
+  for (const id of state.order) {
+    const el = state.els[id];
+    if (!el) continue;
+    // big containers (graphs, number lines, canvases) are checked through their contents instead
+    if (el.kind === "text" || (el.kind === "block" && el.box.w * el.box.h < 60000)) blockers.push(el.box);
+  }
+  const hits = (x: number, y: number) =>
+    x - r < 4 ||
+    y - r < 4 ||
+    x + r > BOARD_W - 4 ||
+    blockers.some((b) => x + r > b.x - 3 && x - r < b.x + b.w + 3 && y + r > b.y - 3 && y - r < b.y + b.h + 3) ||
+    taken.some((t) => Math.hypot(t.x - x, t.y - y) < 2 * r + 4);
+  const cy = bb.y + Math.min(bb.h / 2, 16);
+  const candidates: [number, number][] = [
+    [bb.x - r - 6, cy],
+    [bb.x + r, bb.y - r - 6],
+    [bb.x + bb.w + r + 6, cy],
+    [bb.x + r, bb.y + bb.h + r + 6],
+    [bb.x - r - 6, bb.y - r - 4],
+  ];
+  for (const [x, y] of candidates) if (!hits(x, y)) return { x, y };
+  // left margin (content starts at x=40), nudged down past other badges
+  let y = Math.max(r + 4, cy);
+  while (taken.some((t) => Math.abs(t.x - 18) < 4 && Math.abs(t.y - y) < 2 * r + 4)) y += 2 * r + 4;
+  return { x: 18, y };
+}
+
 /** Bounding box of what a group of primitives draws (ignores clears). */
 export function primsBox(prims: Prim[]): Box | null {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;

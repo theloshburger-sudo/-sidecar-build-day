@@ -172,3 +172,19 @@ test("caret groups with spaces become superscripts", async () => {
   const { caretToUnicode } = await import("../lib/mathtext");
   assert.equal(caretToUnicode("i^(140 + 2)"), "i⁽¹⁴⁰⁺²⁾");
 });
+
+test("beat badges never sit on top of writing", async () => {
+  const { badgeSpot } = await import("../lib/board");
+  const r = applyActions(emptyBoard(), [
+    { type: "write", id: "a", text: "Current ratio = ?", size: "lg" },
+    { type: "write", id: "f", text: "Current ratio = Current Assets ÷ Current Liabilities" },
+  ]);
+  const hl = applyActions(r.state, [{ type: "highlight", target: "f", match: "Current Assets ÷ Current" }]);
+  const box = (hl.prims[0] as { x: number; y: number; w: number; h: number });
+  const spot = badgeSpot(hl.state, box, [{ x: 18, y: 60 }]);
+  for (const id of ["a", "f"]) {
+    const b = hl.state.els[id].box;
+    const overlap = spot.x + 13 > b.x && spot.x - 13 < b.x + b.w && spot.y + 13 > b.y && spot.y - 13 < b.y + b.h;
+    assert.ok(!overlap, `badge overlaps ${id}`);
+  }
+});
