@@ -90,24 +90,42 @@ export function isEcho(heard: string, speaking: string): boolean {
 }
 
 let preferred: SpeechSynthesisVoice | null = null;
+/** The student's voice pick: a natural voice id (e.g. "george") or "browser:<voice name>". */
+let choice = "";
+
+export function setVoiceChoice(v: string) {
+  if (v === choice) return;
+  choice = v;
+  preferred = null;
+}
+
+/** English browser voices, most natural first (for the voice picker when no natural voice is set up). */
+export function browserVoices(): string[] {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return [];
+  const voices = window.speechSynthesis.getVoices().filter((v) => v.lang?.toLowerCase().startsWith("en"));
+  return [...voices].sort((a, b) => voiceScore(b) - voiceScore(a)).filter((v) => voiceScore(v) > -50).slice(0, 8).map((v) => v.name);
+}
+
+function voiceScore(v: SpeechSynthesisVoice) {
+  const n = v.name.toLowerCase();
+  let s = 0;
+  if (/natural|neural|online/.test(n)) s += 50; // Edge / Windows neural voices
+  if (/premium|enhanced/.test(n)) s += 40; // macOS / iOS downloaded voices
+  if (/google/.test(n)) s += 25;
+  if (/ava|aria|jenny|emma|samantha|allison|zoe|serena/.test(n)) s += 10;
+  if (/en-us/i.test(v.lang)) s += 5;
+  if (/compact|espeak|fred|albert|zarvox|whisper|bad news|bells|boing|bubbles|cellos|jester|organ|trinoids|wobble/.test(n)) s -= 100;
+  return s;
+}
 
 /** Pick the most natural-sounding voice the browser has (neural "Natural"/"Online"/"Premium" voices first). */
 function pickVoice(): SpeechSynthesisVoice | null {
   if (preferred) return preferred;
   const voices = window.speechSynthesis.getVoices().filter((v) => v.lang?.toLowerCase().startsWith("en"));
   if (!voices.length) return null;
-  const score = (v: SpeechSynthesisVoice) => {
-    const n = v.name.toLowerCase();
-    let s = 0;
-    if (/natural|neural|online/.test(n)) s += 50; // Edge / Windows neural voices
-    if (/premium|enhanced/.test(n)) s += 40; // macOS / iOS downloaded voices
-    if (/google/.test(n)) s += 25;
-    if (/ava|aria|jenny|emma|samantha|allison|zoe|serena/.test(n)) s += 10;
-    if (/en-us/i.test(v.lang)) s += 5;
-    if (/compact|espeak|fred|albert|zarvox|whisper|bad news|bells|boing|bubbles|cellos|jester|organ|trinoids|wobble/.test(n)) s -= 100;
-    return s;
-  };
-  preferred = [...voices].sort((a, b) => score(b) - score(a))[0] ?? null;
+  const picked = choice.startsWith("browser:") ? voices.find((v) => v.name === choice.slice(8)) : undefined;
+  if (picked) return (preferred = picked);
+  preferred = [...voices].sort((a, b) => voiceScore(b) - voiceScore(a))[0] ?? null;
   return preferred;
 }
 
@@ -164,21 +182,23 @@ const estimateMs = (text: string, rate: number) => (text.split(/\s+/).filter(Boo
 function fetchTTS(text: string): Promise<Blob | null> {
   const clean = speakable(text);
   if (!clean) return Promise.resolve(null);
-  const hit = ttsCache.get(clean);
+  const voice = choice.startsWith("browser:") ? "" : choice;
+  const cacheKey = `${voice}|${clean}`;
+  const hit = ttsCache.get(cacheKey);
   if (hit) return hit;
   const ctrl = new AbortController();
   const giveUp = setTimeout(() => ctrl.abort(), 6000);
-  const p = fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: clean }), signal: ctrl.signal })
+  const p = fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: clean, voice }), signal: ctrl.signal })
     .then((r) => (r.ok ? r.blob() : null))
     .catch(() => null)
     .finally(() => clearTimeout(giveUp));
-  ttsCache.set(clean, p);
+  ttsCache.set(cacheKey, p);
   if (ttsCache.size > 60) ttsCache.delete(ttsCache.keys().next().value!);
   return p;
 }
 
 export function prefetchVoice(text: string) {
-  void fetchTTS(text);
+  if (!choice.startsWith("browser:")) void fetchTTS(text);
 }
 
 /**
@@ -241,7 +261,7 @@ export function speak(text: string, opts: SpeakOptions = {}) {
     }, 900);
   };
 
-  if (!opts.natural) return browserVoice();
+  if (!opts.natural || choice.startsWith("browser:")) return browserVoice();
 
   fetchTTS(text).then((blob) => {
     if (my !== token) return;
