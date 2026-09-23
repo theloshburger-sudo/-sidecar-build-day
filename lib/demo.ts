@@ -10,6 +10,8 @@ export interface DemoTurn extends Partial<TutorTurn> {
   /** Nudge shown after a wrong answer (turn repeats its question). */
   hint?: string;
   hintBoard?: BoardAction[];
+  /** What Teacher learns about the student when they miss this step. */
+  hintInsight?: string;
   /** Prefix for the next turn's speech after a right / wrong answer. */
   rightPrefix?: string;
   wrongPrefix?: string;
@@ -85,6 +87,7 @@ const algebra: DemoAssignment = {
         expect: ["subtract 7", "minus 7", "−7", "-7", "subtract"],
         hint: "Close! Look at the red circle: 7 was added last. What undoes adding 7?",
         hintBoard: [{ type: "highlight", target: "eq1", match: "+ 7" }],
+        hintInsight: "Needs the order of undoing shown visually",
         rightPrefix: "Yes! ",
         wrongPrefix: "Let's do it together: we subtract 7. ",
       }),
@@ -255,6 +258,7 @@ const intervals: DemoAssignment = {
       t({
         phase: "teach",
         gap: "∩ = the overlap, ∪ = everything; each endpoint follows its own bracket",
+        insight: "New to ∩ and ∪: start from a picture",
         plan: ["Draw I and J", "∩ = the overlap", "∪ = everything"],
         step: 0,
         say: "",
@@ -274,6 +278,7 @@ const intervals: DemoAssignment = {
         choices: [],
         expect: ["0to2", "0and2", "(0,2)", "0-2", "0through2"],
         hint: "Look straight down from each bar. Blue starts at 0 and orange stops at 2. So the part in both runs from… to…?",
+        hintInsight: "Mixes up where overlaps start and stop",
         hintBoard: [
           { type: "circle", target: "nl.1.lo", color: "red" },
           { type: "circle", target: "nl.2.hi", color: "red" },
@@ -371,6 +376,154 @@ const intervals: DemoAssignment = {
         board: [
           { type: "narrate", text: "Let's slow down and look at just one thing: the blue bar. It covers everything from 0 up to 3." },
           { type: "highlight", target: "i" },
+        ],
+      }),
+    },
+  },
+};
+
+// ---------------------------------------------------------------- History
+const history: DemoAssignment = {
+  demoId: "history",
+  name: "HIST 110 · World War I Study Guide",
+  blurb: "Causes and effects, alliances, writing a strong explanation",
+  emoji: "⚔",
+  problems: [
+    {
+      id: "p1",
+      title: "1. How did alliances turn one murder into a world war?",
+      text: "1. Explain how the alliance system helped turn the assassination of Archduke Franz Ferdinand into a world war. Use at least three specific events.",
+      subject: "History",
+    },
+    { id: "p2", title: "2. Which MAIN cause mattered most?", text: "2. Of the MAIN causes (Militarism, Alliances, Imperialism, Nationalism), which was most important in starting WWI? Defend your answer.", subject: "History" },
+    { id: "p3", title: "3. Western vs. Eastern Front", text: "3. Compare fighting on the Western Front and the Eastern Front.", subject: "History" },
+  ],
+  lesson: {
+    problemId: "p1",
+    script: [
+      t({
+        phase: "diagnose",
+        say: "",
+        board: [
+          { type: "narrate", text: "Hi! This question is really about a chain reaction, so I'll write it up top where we can keep looking at it." },
+          { type: "write", id: "q", text: "How did alliances turn one murder into a world war?", size: "md", zone: "full" },
+          { type: "underline", target: "q", match: "alliances", color: "red" },
+          { type: "narrate", text: "I underlined alliances, because that word is what your answer has to explain. Where are you stuck?" },
+        ],
+        question: "Where are you stuck?",
+        choices: ["I don't really know the events", "I know the events, not how they connect", "Can you check my answer?"],
+      }),
+      t({
+        phase: "teach",
+        gap: "Alliances made each war pull in the next country, like dominoes",
+        insight: "Remembers history best as a cause-and-effect chain",
+        plan: ["Know the two teams", "Follow the dominoes", "Write the explanation"],
+        step: 0,
+        say: "",
+        board: [
+          { type: "narrate", text: "First you need the two teams. These countries had promised to defend each other, so a fight with one meant a fight with its friends." },
+          { type: "box", id: "teams", zone: "full", text: "The two teams (1914)", items: ["Allies (Triple Entente): Russia, France, Britain", "Central Powers (Triple Alliance): Germany, Austria-Hungary"], color: "blue" },
+          { type: "narrate", text: "Now the dominoes. It starts on June 28, 1914, when a Serbian nationalist shoots Austria's Archduke in Sarajevo." },
+          { type: "flow", id: "chain", zone: "full", text: "The chain reaction", items: [] },
+          { type: "add", target: "chain", text: "June 28: Archduke Franz Ferdinand shot in Sarajevo" },
+          { type: "narrate", text: "Austria-Hungary blames Serbia and declares war. I draw an arrow, because the first event caused this one." },
+          { type: "add", target: "chain", text: "Austria-Hungary declares war on Serbia" },
+          { type: "narrate", text: "Russia had promised to protect Serbia, so it gets its army ready. That's the alliance kicking in." },
+          { type: "add", target: "chain", text: "Russia mobilizes to defend Serbia" },
+          { type: "narrate", text: "Your turn: Germany was on Austria's team. What does Germany do next, and why?" },
+        ],
+        question: "Your turn: what does Germany do next, and why?",
+        choices: [],
+        expect: ["war", "attack", "declare", "fight"],
+        hint: "Look at the teams box: Germany promised to back Austria-Hungary. Russia is getting ready to fight Austria. So Germany would…?",
+        hintBoard: [{ type: "highlight", target: "teams.2" }],
+        hintInsight: "Needs the teams in view to follow the chain",
+        rightPrefix: "Exactly. ",
+        wrongPrefix: "Germany declares war on Russia, because it promised to back Austria-Hungary. ",
+      }),
+      t({
+        phase: "teach",
+        step: 1,
+        say: "",
+        board: [
+          { type: "narrate", text: "Germany declares war on Russia, because it's backing its ally. I'll add your domino in green, with the because, since the why is what earns the points." },
+          { type: "add", target: "chain", text: "Germany declares war on Russia (backing its ally)", color: "green" },
+          { type: "narrate", text: "Germany's plan was to beat France fast by marching through neutral Belgium, so that's the next domino." },
+          { type: "add", target: "chain", text: "Germany invades Belgium to reach France" },
+          { type: "narrate", text: "Last one is yours. Britain had promised to protect Belgium. What does Britain do, and why does that make it a WORLD war?" },
+        ],
+        question: "Your turn: what does Britain do, and why does that make it a world war?",
+        choices: [],
+        expect: ["war", "join", "declare", "empire", "colon"],
+        hint: "Britain promised to protect Belgium, and Germany just invaded it. And Britain ruled colonies all over the world…",
+        rightPrefix: "Yes! ",
+        wrongPrefix: "Britain declares war on Germany, and brings its empire around the globe with it. ",
+      }),
+      t({
+        phase: "check",
+        step: 2,
+        say: "",
+        board: [
+          { type: "narrate", text: "Britain declares war on Germany, and its colonies all over the world come with it. That's how one murder became a world war." },
+          { type: "add", target: "chain", text: "Britain declares war on Germany; empires join worldwide", color: "green" },
+          { type: "narrate", text: "Notice every arrow is a promise being kept. That pattern is your thesis, so I'll write it out." },
+          { type: "write", id: "thesis", text: "Thesis: Alliances turned a local murder into a world war, because each promise pulled another power in.", size: "md", zone: "full", color: "purple" },
+          { type: "highlight", target: "thesis", match: "because each promise pulled another power in" },
+        ],
+        question: "Ready to try one on your own?",
+        choices: ["Yes, let's go"],
+      }),
+      t({
+        phase: "practice",
+        say: "",
+        board: [
+          { type: "narrate", text: "New board. Alliances were one of four big causes. Historians remember them as MAIN." },
+          { type: "clear" },
+          { type: "mindmap", id: "main", zone: "full", text: "Causes of WWI", items: [], color: "purple" },
+          { type: "narrate", text: "Militarism: countries raced to build huge armies. Alliances: the promises we just traced." },
+          { type: "add", target: "main", text: "Militarism: arms race, huge armies" },
+          { type: "add", target: "main", text: "Alliances: promises to defend each other" },
+          { type: "narrate", text: "Imperialism: fighting over colonies. Nationalism: intense pride, like the Serbian nationalist who fired the first shot." },
+          { type: "add", target: "main", text: "Imperialism: competition for colonies" },
+          { type: "add", target: "main", text: "Nationalism: pride, Serbia vs Austria" },
+        ],
+        practice: "Pick one OTHER cause (Militarism, Imperialism or Nationalism) and explain in 2 sentences how it helped start the war. Use the word \"because\".",
+        question: "Your turn: explain one other cause in 2 sentences, using \"because\".",
+        choices: [],
+      }),
+      t({
+        phase: "wrapup",
+        gap: "Alliances made each war pull in the next country, like dominoes",
+        say: "",
+        board: [
+          { type: "narrate", text: "Nice work putting that in your own words. The big skill today: don't just list events, connect them with because." },
+          { type: "note", zone: "full", text: "Today's skill", items: ["Explain HOW, not just WHAT", "Event → because → next event", "Every arrow is a reason"] },
+        ],
+        question: "",
+        choices: [],
+        videos: [{ title: "Causes of World War I explained", query: "how alliances caused world war 1 explained" }],
+      }),
+    ],
+    interrupts: {
+      why: t({
+        say: "",
+        board: [
+          { type: "narrate", text: "Good question! Teachers care about the chain because it explains WHY the war spread, not just what happened. Each arrow is a reason you can write down." },
+          { type: "note", zone: "right", text: "Why a chain?", items: ["Lists = what happened", "Chains = why it happened", "Why = the points"] },
+        ],
+      }),
+      differently: t({
+        say: "",
+        board: [
+          { type: "narrate", text: "Picture a group chat with two friend groups. Someone insults one person, their friends jump in, then the other group's friends jump in. Nobody wanted a huge fight, but the promises made one." },
+          { type: "box", zone: "full", text: "Group-chat version", items: ["One person gets insulted (Archduke shot)", "Their friend jumps in (Austria vs Serbia)", "Serbia's friend jumps in (Russia)", "…until everyone is in it (world war)"] },
+        ],
+      }),
+      slower: t({
+        say: "",
+        board: [
+          { type: "narrate", text: "Let's slow down and look at just the first two dominoes: a shooting, then Austria declares war. One caused the other." },
+          { type: "highlight", target: "chain.1" },
         ],
       }),
     },
@@ -812,7 +965,7 @@ const economics: DemoAssignment = {
   },
 };
 
-export const DEMO_ASSIGNMENTS: DemoAssignment[] = [algebra, intervals, accounting, chemistry, economics];
+export const DEMO_ASSIGNMENTS: DemoAssignment[] = [intervals, history, algebra, accounting, chemistry, economics];
 
 export function getDemo(id: string | undefined): DemoAssignment | undefined {
   return DEMO_ASSIGNMENTS.find((d) => d.demoId === id);

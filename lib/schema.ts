@@ -34,6 +34,8 @@ export const boardActionSchema = {
     variant("timeline", { id: str, text: str, items: strArr }),
     variant("numberLine", { id: str, zone, xMin: num, xMax: num, text: str, items: strArr }),
     variant("interval", { target: str, text: str, color }),
+    variant(["flow", "mindmap"], { id: str, text: str, items: strArr, zone, color }),
+    variant("add", { target: str, text: str, color }),
     variant("narrate", { text: str }),
     variant("clear", {}),
   ],
@@ -43,7 +45,7 @@ export const tutorTurnSchema = {
   type: "object",
   additionalProperties: false,
   // board comes first so it streams first: Teacher starts talking and drawing while the rest arrives.
-  required: ["board", "say", "phase", "question", "choices", "gap", "plan", "step", "videos", "practice", "verdict"],
+  required: ["board", "say", "phase", "question", "choices", "gap", "plan", "step", "videos", "practice", "verdict", "insight"],
   properties: {
     board: { type: "array", items: boardActionSchema },
     say: str,
@@ -64,6 +66,7 @@ export const tutorTurnSchema = {
     },
     practice: str,
     verdict: { type: "string", enum: ["none", "correct", "partial", "incorrect"] },
+    insight: str,
   },
 } as const;
 

@@ -36,6 +36,7 @@ function toTurn(d: DemoTurn, extra: Partial<TutorTurn> = {}, prefix = "", suffix
     videos: d.videos ?? [],
     practice: d.practice ?? "",
     verdict: "none",
+    insight: d.insight ?? "",
     ...extra,
     board,
     say,
@@ -65,6 +66,13 @@ export function matchesAnswer(answer: string, expects: string[]): boolean {
 }
 
 type InterruptKind = "why" | "differently" | "slower";
+
+/** What Teacher learns about a student from how they interrupt. */
+const INTERRUPT_INSIGHT: Record<InterruptKind, string> = {
+  why: "Wants the reason behind each step",
+  differently: "Clicks with real-life pictures and analogies",
+  slower: "Prefers smaller steps, one at a time",
+};
 
 export function classifyInterrupt(text: string): InterruptKind | null {
   const s = text.trim().toLowerCase();
@@ -112,6 +120,7 @@ export function demoReply(lesson: DemoLesson, state: DemoState, text: string): {
     const back = cur.question ? ` Now, back to our question: ${cur.question}` : "";
     return {
       turn: toTurn(it, {
+        insight: it.insight ?? INTERRUPT_INSIGHT[kind],
         phase: cur.phase ?? "teach",
         question: cur.question ?? "",
         choices: cur.choices ?? [],
@@ -124,7 +133,7 @@ export function demoReply(lesson: DemoLesson, state: DemoState, text: string): {
   if (cur.expect) {
     if (state.wrong === 0 && cur.hint) {
       return {
-        turn: toTurn({ say: cur.hint, phase: cur.phase, board: cur.hintBoard ?? [] }, {
+        turn: toTurn({ say: cur.hint, phase: cur.phase, board: cur.hintBoard ?? [], insight: cur.hintInsight }, {
           question: cur.question ?? "",
           choices: cur.choices ?? [],
           step: cur.step ?? 0,

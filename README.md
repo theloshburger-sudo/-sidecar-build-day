@@ -19,7 +19,9 @@ Upload a Canvas assignment or study guide (PDF or a phone photo), tap the one pr
 | **Interrupt anytime** | Type, use the mic, or tap *Why? / Show it differently / Slow down / Give me an example*. Drawing stops, and Teacher answers that exact question and then checks understanding. |
 | **Never just the answer** | Teacher teaches the next idea and makes you do the step. The session ends with a *different* related problem that gets graded. |
 | **Focus Mode** | Shows only the board, the current question and a progress meter. |
-| **Your pace, your format** | You pick a starting format (draw it / worked example / analogy / questions). These aren't treated as fixed "learning styles", and Teacher adapts from what you ask. There's also an extra-small-steps mode. |
+| **Any subject** | Math, science, history, essays, architecture, business. Teacher picks the right picture: number lines and equations, **flow chains** for cause → effect, **mind maps** for factors, timelines, tables, T-accounts. On essays it coaches the thesis and evidence with you and never writes it for you. |
+| **Learns how you learn** | Every reply can include one note on how you learn best ("wants the reason behind each step", "mixes up open and closed endpoints"). Notes are kept only on your device (🧠 chip, which you can forget anytime), sent with each question so Teacher adapts, and carried into your next session. Not fixed "learning styles": it's what actually happened. |
+| **Sensible defaults** | No mode picking: whiteboard teaching, voice, focus mode and extra-small steps are all on from the start. |
 | **Voice, synced to the board** | Teacher talks with a natural ElevenLabs voice, or the best browser voice as a fallback. Drawing starts when the voice starts and is paced to finish with it. Speech recognition lets you talk back. Voice is optional: every control also works with text. |
 | **Talk and draw in step** | Teacher teaches in short beats: one spoken line, then exactly the strokes it describes. The caption highlights the line being spoken. |
 | **Fast replies** | Claude's reply streams in, so Teacher starts the first beat while the rest is still being written. The system prompt is cached. |
@@ -79,7 +81,9 @@ Every `git push` redeploys automatically after that.
 4. **Teacher thinks out loud while drawing** (60s): It draws the number line, then says *"I runs from 0 to 3, so I draw a blue bar"* while drawing it. Arrows go from the `(` and `]` down to the hollow and filled dots, with the reason spoken ("round bracket means 0 isn't included…").
 5. **You do the thinking** (45s): Type a wrong overlap first (e.g. "0 to 1") to show the hint (the endpoints get circled), then "from 0 to 2". Teacher draws **I ∩ J** as a green row and hands you **I ∪ J**: type `(-3, 3]`. Click **Why?** at any point to show an interruption.
 6. **Solo problem + wrap** (30s): Solve A ∩ B = `(3, 5)` on your own, then show the recap and **Save my recap**.
-7. Optional: click ✍️ **Draw** and circle something on the board to show Teacher can see your ink (live AI).
+7. **"It learns you"** (20s): Click **Why?** mid-lesson. A toast shows *"🧠 Teacher learned: Wants the reason behind each step"*, and the 🧠 chip keeps it for next time.
+8. **"Any subject"** (30s): Go back and open **HIST 110 · World War I**. Teacher builds a cause → effect chain box by box ("I draw an arrow *because* the first event caused this one"), you add the next domino, and it ends with a mind map of the four MAIN causes.
+9. Optional: click ✍️ **Draw** and circle something on the board to show Teacher can see your ink (live AI).
 
 **Backup plan:** if the Wi-Fi dies, the samples still run. The pill says **Offline demo**, and the ★ lessons need no network. On a live deployment you can also force it with the "Use the offline scripted lesson" toggle on the pick screen.
 

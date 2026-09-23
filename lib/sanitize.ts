@@ -36,6 +36,7 @@ export function normalizeTurn(raw: unknown): TutorTurn {
       .slice(0, 2),
     practice: s(r.practice, 800),
     verdict,
+    insight: s(r.insight, 120).trim(),
   };
 }
 

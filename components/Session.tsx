@@ -14,6 +14,7 @@ import { createRecognizer, isEcho, prefetchVoice, speakAsync, speechRecognitionS
 import { BeatBuilder, beatsFromTurn, type Beat } from "@/lib/narration";
 import { BoardStreamParser, STREAM_ERROR } from "@/lib/stream-parse";
 import { normalizeTurn } from "@/lib/sanitize";
+import { addInsight, forgetLearner, loadLearner } from "@/lib/profile";
 import type { Assignment, BoardAction, ChatEntry, Phase, Preferences, Problem, TutorTurn, VideoSuggestion } from "@/lib/types";
 
 const PHASES: { id: Phase; label: string }[] = [
@@ -92,6 +93,13 @@ export default function Session({
   const [penMode, setPenMode] = useState(false);
   const [inkCount, setInkCount] = useState(0);
   const inkSent = useRef(0);
+  /** What Teacher has learned about how this student learns (on-device). */
+  const [learner, setLearner] = useState<string[]>([]);
+  const [learnerNew, setLearnerNew] = useState(false);
+  const [learnerOpen, setLearnerOpen] = useState(false);
+  const learnerRef = useRef<string[]>([]);
+  learnerRef.current = learner;
+  useEffect(() => setLearner(loadLearner()), []);
 
   const wb = useRef<WhiteboardHandle>(null);
   const board = useRef<BoardState>(emptyBoard());
@@ -249,6 +257,15 @@ export default function Session({
   /** Record a finished turn: history, progress, celebration. */
   const finishTurn = useCallback((turn: TutorTurn) => {
     pushHistory({ role: "tutor", turn });
+    if (turn.insight) {
+      const next = addInsight(turn.insight);
+      if (next) {
+        setLearner(next);
+        setLearnerNew(true);
+        setNotice(`🧠 Teacher learned: ${turn.insight}`);
+        setTimeout(() => setLearnerNew(false), 3200);
+      }
+    }
     if (turn.plan.length) setPlan(turn.plan);
     if (turn.gap) setGap(turn.gap);
     if (turn.videos.length) setVideos(turn.videos);
@@ -304,6 +321,7 @@ export default function Session({
             boardSummary: describeBoard(board.current),
             studentMessage: text ?? "",
             image,
+            learner: learnerRef.current,
           }),
         });
         if (!res.ok || !res.body) {
@@ -543,6 +561,7 @@ export default function Session({
     return () => clearTimeout(t);
   }, [notice]);
 
+  const lastBeatIdx = beatLines.reduce((acc, l, i) => (l ? i : acc), -1);
   const mood: Mood = listening ? "listening" : thinking ? "thinking" : happy ? "happy" : speaking || boardBusy ? "talking" : "idle";
   const focus = prefs.focus;
   const phaseIdx = PHASES.findIndex((p) => p.id === phase);
@@ -674,7 +693,9 @@ export default function Session({
                     {!streaming && lastTutor?.verdict === "partial" && <span className="verdict verdict--mid">Almost</span>}
                     {!streaming && lastTutor?.verdict === "incorrect" && <span className="verdict verdict--no">Not yet, and that&apos;s okay</span>}
                     {beatLines.map((line, i) =>
-                      line && (activeBeat === -1 || i <= activeBeat) ? (
+                      // While teaching: the line being spoken (and the one before it, fading).
+                      // When done: just the last line, usually the question. The full text is in the chat.
+                      line && (activeBeat === -1 ? i === lastBeatIdx : i <= activeBeat && i >= activeBeat - 1) ? (
                         <span key={i} className={`beat ${activeBeat === -1 ? "" : i === activeBeat ? "beat--now" : "beat--past"}`}>
                           {line}{" "}
                         </span>
@@ -720,6 +741,37 @@ export default function Session({
                   Show Teacher my drawing →
                 </button>
               )}
+              <div className={`learner-chip ${learnerNew ? "learner-chip--new" : ""}`}>
+                <button className="tool" onClick={() => setLearnerOpen((v) => !v)} aria-expanded={learnerOpen} title="What Teacher has learned about how you learn">
+                  🧠 {learner.length ? learner[0] : "Teacher is getting to know you"}
+                </button>
+                {learnerOpen && (
+                  <div className="learner-pop" role="dialog" aria-label="What Teacher has learned about you">
+                    <strong>What Teacher has learned about you</strong>
+                    {learner.length ? (
+                      <ul>
+                        {learner.map((n) => (
+                          <li key={n}>{n}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="muted">Nothing yet. Ask questions and answer in your own words, and Teacher will adapt.</p>
+                    )}
+                    <p className="muted small">Saved only on this device. Teacher uses it to tailor explanations.</p>
+                    {learner.length > 0 && (
+                      <button
+                        className="link-back small"
+                        onClick={() => {
+                          forgetLearner();
+                          setLearner([]);
+                        }}
+                      >
+                        Forget all
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
               <span className="tools-spacer" />
               <div className="speed" role="group" aria-label="Drawing speed" title="How fast Teacher draws. Auto matches the voice.">
                 <span aria-hidden>✏️</span>

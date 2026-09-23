@@ -130,3 +130,17 @@ test("number lines build row by row, with addressable endpoints and symbol-to-do
 test("interval without a number line is ignored safely", () => {
   assert.doesNotThrow(() => applyActions(emptyBoard(), [{ type: "interval", target: "nope", text: "(0, 1)" }]));
 });
+
+test("flow chains grow row by row and mind maps take branches", () => {
+  const add = (t: string) => ({ type: "add", target: "chain", text: t });
+  const r = applyActions(emptyBoard(), [
+    { type: "flow", id: "chain", text: "Chain", items: [], zone: "full" },
+    add("one"), add("two"), add("three"), add("four"), add("five"), add("six"),
+    { type: "mindmap", id: "mm", text: "Causes", items: ["A", "B"], zone: "full" },
+    { type: "add", target: "mm", text: "C" },
+  ] as never);
+  for (const id of ["chain.1", "chain.6", "mm.center", "mm.3"]) assert.ok(r.state.els[id], id);
+  const c6 = r.state.els["chain.6"].box;
+  const mm = r.state.els["mm"].box;
+  assert.ok(mm.y >= c6.y + c6.h, "mind map sits below the grown chain");
+});
