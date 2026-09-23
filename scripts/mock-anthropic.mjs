@@ -2,7 +2,7 @@
 // without a key. Run: node scripts/mock-anthropic.mjs [port] [logFile]
 // Then start the app with ANTHROPIC_API_KEY=test ANTHROPIC_BASE_URL=http://localhost:<port>
 import { createServer } from "node:http";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 
 const port = Number(process.argv[2] || 4010);
 const log = process.argv[3];
@@ -53,6 +53,8 @@ const turns = process.env.MOCK_NUMBERLINE === "1" ? [numberLineTurn] : [
   },
 ];
 if (process.env.MOCK_NUMBERLINE === "1") turns.length = 1;
+// MOCK_TURNS=path.json replays a scripted conversation (used for teaching evaluations).
+if (process.env.MOCK_TURNS) turns.splice(0, turns.length, ...JSON.parse(readFileSync(process.env.MOCK_TURNS, "utf8")));
 
 createServer((req, res) => {
   let body = "";

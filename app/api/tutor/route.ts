@@ -66,17 +66,38 @@ export async function POST(req: Request) {
         sent = true;
         controller.enqueue(encoder.encode(t));
       };
-      try {
+      const t0 = Date.now();
+      let firstAt = 0;
+      const run = async (thinkingOff: boolean) => {
         const s = getClient().messages.stream({
           model: MODEL,
           max_tokens: 8000,
           // Cached system prompt: repeat turns skip re-reading it, which cuts time-to-first-token.
           system: [{ type: "text", text: TUTOR_SYSTEM, cache_control: { type: "ephemeral" } }],
           messages,
+          // Tutoring steps are short; skipping extended thinking makes Teacher start talking much sooner.
+          ...(thinkingOff ? { thinking: { type: "disabled" as const } } : {}),
           output_config: { effort: haiku ? undefined : effort, format: { type: "json_schema", schema } },
         });
         for await (const ev of s) {
-          if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") send(ev.delta.text);
+          if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") {
+            if (!firstAt) firstAt = Date.now();
+            send(ev.delta.text);
+          }
+        }
+        const final = await s.finalMessage();
+        console.log(
+          JSON.stringify({ tutor_timing: { model: MODEL, thinking: !thinkingOff, first_text_ms: firstAt - t0, total_ms: Date.now() - t0, output_tokens: final.usage.output_tokens, cache_read: final.usage.cache_read_input_tokens ?? 0 } }),
+        );
+      };
+      try {
+        const wantThinking = process.env.ANTHROPIC_THINKING === "on" || haiku;
+        try {
+          await run(!wantThinking);
+        } catch (err) {
+          // Some models don't allow turning thinking off: retry once with it on.
+          if (!sent && !wantThinking && err instanceof Anthropic.APIError && err.status === 400 && /thinking/i.test(err.message)) await run(false);
+          else throw err;
         }
       } catch (err) {
         const schemaProblem =

@@ -1,0 +1,23 @@
+[
+ {"board":[
+   {"type":"narrate","text":"Hey! Here are I and J on one number line."},
+   {"type":"numberLine","id":"nl","zone":"full","xMin":-4,"xMax":4,"text":"","items":["I: (0, 3]","J: (−3, 2)"]},
+   {"type":"narrate","text":"Where does it get confusing for you?"}],
+  "say":"","phase":"diagnose","question":"Where are you stuck?","choices":["I don't know what ∩ and ∪ mean","I mess up the endpoints","Can you check my answer?"],"gap":"","plan":[],"step":0,"videos":[],"practice":"","verdict":"none"},
+ {"board":[
+   {"type":"narrate","text":"∩ means in both. The bars overlap from 0 to 2."},
+   {"type":"numberLine","id":"nl2","zone":"full","xMin":-4,"xMax":4,"text":"","items":["I ∩ J: (0, 2)"]},
+   {"type":"narrate","text":"0 isn't in I and 2 isn't in J, so both ends stay open."},
+   {"type":"write","id":"ans1","text":"I ∩ J = (0, 2)","zone":"left","size":"lg","color":"blue"},
+   {"type":"circle","target":"ans1","match":"(0","text":"0 not in I","color":"red"},
+   {"type":"narrate","text":"Your turn. ∪ means in either one. What's I ∪ J?"}],
+  "say":"","phase":"teach","question":"Your turn: what is I ∪ J?","choices":[],"gap":"∩ = overlap, ∪ = everything in either; endpoints follow the set they come from","plan":["∩ = the overlap","Check the endpoints","∪ = everything"],"step":1,"videos":[],"practice":"","verdict":"none"},
+ {"board":[
+   {"type":"narrate","text":"Exactly. From −3 all the way to 3, and 3 is included because of I's bracket."},
+   {"type":"write","id":"ans2","text":"I ∪ J = (−3, 3]  ✓","zone":"left","size":"lg","color":"green"},
+   {"type":"narrate","text":"Try one on your own."},
+   {"type":"clear"},
+   {"type":"write","id":"pr","text":"A = [1, 5)    B = (3, 8]","zone":"left","size":"lg","color":"ink"},
+   {"type":"askQuestion","text":"A ∩ B = ?     A ∪ B = ?"}],
+  "say":"","phase":"practice","question":"Find A ∩ B and A ∪ B.","choices":[],"gap":"","plan":[],"step":3,"videos":[],"practice":"A = [1, 5), B = (3, 8]. Find A ∩ B and A ∪ B.","verdict":"correct"}
+]
