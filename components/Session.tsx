@@ -5,9 +5,10 @@ import Cloud, { type Mood } from "./Cloud";
 import TopBar, { StatusPill } from "./TopBar";
 import Whiteboard, { type WhiteboardHandle } from "./Whiteboard";
 import VideoCards from "./VideoCards";
+import MathText from "./MathText";
 import { RECAPS_KEY, loadRecaps } from "./Home";
 import type { AppStatus, Engine } from "./SidecarApp";
-import { applyActions, boardHeight, describeBoard, emptyBoard, BOARD_MIN_H, type BoardState, type Measure } from "@/lib/board";
+import { applyActions, boardHeight, describeBoard, emptyBoard, primsBox, BOARD_MIN_H, type BoardState, type Measure } from "@/lib/board";
 import { getDemo } from "@/lib/demo";
 import { demoReply, demoStart, type DemoState } from "@/lib/demo-engine";
 import { createRecognizer, isEcho, prefetchVoice, speakAsync, speechRecognitionSupported, stopSpeaking, ttsSupported } from "@/lib/speech";
@@ -89,6 +90,10 @@ export default function Session({
   /** Spoken lines of the current turn, revealed as they're said, and which one is playing. */
   const [beatLines, setBeatLines] = useState<string[]>([]);
   const [activeBeat, setActiveBeat] = useState(-1);
+  /** Glow + numbered badges that tie each spoken line to the strokes it draws. */
+  const [focusBeat, setFocusBeat] = useState<number | null>(null);
+  const [tags, setTags] = useState<{ n: number; x: number; y: number; uid: number }[]>([]);
+  const beatUid = useRef(0);
   const [streaming, setStreaming] = useState(false);
   const [penMode, setPenMode] = useState(false);
   const [inkCount, setInkCount] = useState(0);
@@ -143,10 +148,21 @@ export default function Session({
 
   // ---------------------------------------------------------------- teaching a turn, beat by beat
   /** Draw one beat's actions; resolves when the drawing (and its spoken line) are both finished. */
-  const playBeat = useCallback(async (beat: Beat, alive: () => boolean) => {
+  const playBeat = useCallback(async (beat: Beat, alive: () => boolean, n: number) => {
     const res = applyActions(board.current, beat.actions, measure.current ?? undefined);
     board.current = res.state;
     setBoardH(boardHeight(res.state));
+    // Tag this beat's strokes so they glow while the line is spoken, and badge them with the line's number.
+    const uid = ++beatUid.current;
+    for (const p of res.prims) if (p.kind !== "clear") p.beat = uid;
+    const clearAt = res.prims.findIndex((p) => p.kind === "clear");
+    const drawn = clearAt >= 0 ? res.prims.slice(clearAt + 1) : res.prims;
+    const bb = primsBox(drawn);
+    setTags((t) => {
+      const kept = clearAt >= 0 ? [] : t;
+      return bb && beat.text ? [...kept, { n, uid, x: Math.max(16, bb.x - 22), y: Math.max(16, bb.y + 10) }] : kept;
+    });
+    setFocusBeat(uid);
     const p = prefsRef.current;
     const auto = !p.speed;
     if (p.voice && beat.text) {
@@ -194,19 +210,24 @@ export default function Session({
 
     setBeatLines([]);
     setActiveBeat(-1);
+    setTags([]);
+    setFocusBeat(null);
     (async () => {
       while (alive()) {
         if (next < closed()) {
           const i = next++;
           setActiveBeat(i);
           if (natural() && beats[i + 1]?.text) prefetchVoice(beats[i + 1].text);
-          await playBeat(beats[i], alive);
+          await playBeat(beats[i], alive, i + 1);
           continue;
         }
         if (ended) break;
         await new Promise<void>((r) => (wake = r));
       }
-      if (alive()) setActiveBeat(-1);
+      if (alive()) {
+        setActiveBeat(-1);
+        setFocusBeat(null);
+      }
     })();
 
     const handle = {
@@ -246,6 +267,7 @@ export default function Session({
         }
         wb.current?.finishNow();
         setActiveBeat(-1);
+        setFocusBeat(null);
         setBeatLines(beats.map((b) => b.text));
         notify();
       },
@@ -619,10 +641,10 @@ export default function Session({
           <div className={`problem-card card ${showProblem ? "" : "problem-card--closed"}`}>
             <button className="problem-card-head" onClick={() => setShowProblem((v) => !v)} aria-expanded={showProblem}>
               <span className="tag">{problem.subject || "Problem"}</span>
-              <strong>{problem.title}</strong>
+              <strong><MathText text={problem.title} /></strong>
               <span aria-hidden>{showProblem ? "▾" : "▸"}</span>
             </button>
-            {showProblem && <p className="problem-card-text">{problem.text}</p>}
+            {showProblem && <p className="problem-card-text"><MathText text={problem.text} /></p>}
           </div>
 
           <div className="progress card" aria-label="Session progress">
@@ -657,13 +679,13 @@ export default function Session({
                 <div key={i} className="msg msg--tutor">
                   <Cloud size={30} mood="idle" />
                   <div>
-                    <p>{h.turn.say}</p>
-                    {h.turn.question && <p className="msg-q">{h.turn.question}</p>}
+                    <p><MathText text={h.turn.say} /></p>
+                    {h.turn.question && <p className="msg-q"><MathText text={h.turn.question} /></p>}
                   </div>
                 </div>
               ) : (
                 <div key={i} className="msg msg--me">
-                  <p>{h.text}</p>
+                  <p><MathText text={h.text} /></p>
                 </div>
               ),
             )}
@@ -697,7 +719,8 @@ export default function Session({
                       // When done: just the last line, usually the question. The full text is in the chat.
                       line && (activeBeat === -1 ? i === lastBeatIdx : i <= activeBeat && i >= activeBeat - 1) ? (
                         <span key={i} className={`beat ${activeBeat === -1 ? "" : i === activeBeat ? "beat--now" : "beat--past"}`}>
-                          {line}{" "}
+                          {tags.some((t) => t.n === i + 1) && <span className="beat-badge">{i + 1}</span>}
+                          <MathText text={line} />{" "}
                         </span>
                       ) : null,
                     )}
@@ -707,7 +730,7 @@ export default function Session({
                     {lastTutor.verdict === "correct" && <span className="verdict verdict--ok">Nice! ✓</span>}
                     {lastTutor.verdict === "partial" && <span className="verdict verdict--mid">Almost</span>}
                     {lastTutor.verdict === "incorrect" && <span className="verdict verdict--no">Not yet, and that&apos;s okay</span>}
-                    {lastTutor.say}
+                    <MathText text={lastTutor.say} />
                   </>
                 ) : (
                   <span className="muted">Getting the whiteboard ready…</span>
@@ -799,6 +822,8 @@ export default function Session({
               onBusyChange={setBoardBusy}
               penMode={penMode}
               onInkChange={setInkCount}
+              focusBeat={focusBeat}
+              tags={tags}
               empty={
                 <div className="wb-empty-inner">
                   <Cloud size={96} mood="thinking" />
@@ -847,21 +872,24 @@ export default function Session({
             {practice && (phase === "practice" || phase === "wrapup") && (
               <div className="practice">
                 <span className="practice-label">{done ? "Your solo problem" : "Your turn, solo"}</span>
-                <p>{practice}</p>
+                <p><MathText text={practice} /></p>
                 {practiceResult && <span className="practice-result">{practiceResult}</span>}
               </div>
             )}
 
             {lastTutor?.question && !thinking && (
               <p className="question">
-                <span aria-hidden>?</span> {lastTutor.question}
+                <span aria-hidden>?</span>{" "}
+                <span>
+                  <MathText text={lastTutor.question} />
+                </span>
               </p>
             )}
             {lastTutor && lastTutor.choices.length > 0 && !thinking && (
               <div className="choices">
                 {lastTutor.choices.map((c) => (
                   <button key={c} className="choice" onClick={() => send(c)}>
-                    {c}
+                    <MathText text={c} />
                   </button>
                 ))}
               </div>

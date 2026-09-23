@@ -1,5 +1,7 @@
 // Browser speech as progressive enhancement. Everything works without it.
 
+import { segments } from "./mathtext";
+
 type SR = {
   lang: string;
   interimResults: boolean;
@@ -117,7 +119,11 @@ if (typeof window !== "undefined" && "speechSynthesis" in window) {
 
 /** Turn board-style math into words a voice reads naturally. */
 export function speakable(text: string): string {
-  return text
+  // Exponents: x² → "x squared", i¹⁴² → "i to the power of 142".
+  const withPowers = segments(text)
+    .map((sg) => (sg.k === "sup" ? (sg.t === "2" ? " squared" : sg.t === "3" ? " cubed" : ` to the power of ${sg.t}`) : sg.t))
+    .join("");
+  return withPowers
     .replace(/[_*#`]/g, "")
     .replace(/\s*=\s*/g, " equals ")
     .replace(/(\d)\s*[−-]\s*(\d)/g, "$1 minus $2")

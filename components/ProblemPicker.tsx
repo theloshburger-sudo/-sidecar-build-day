@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import TopBar, { StatusPill } from "./TopBar";
+import MathText from "./MathText";
 import type { AppStatus, Engine } from "./SidecarApp";
 import { getDemo } from "@/lib/demo";
 import { forgetLearner, loadLearner } from "@/lib/profile";
@@ -71,11 +72,11 @@ export default function ProblemPicker({
                     <span className="problem-radio" aria-hidden />
                     <span className="problem-body">
                       <span className="problem-top">
-                        <strong>{p.title}</strong>
+                        <strong><MathText text={p.title} /></strong>
                         {p.subject && <span className="tag">{p.subject}</span>}
                         {scripted && <span className="tag tag--star">★ offline lesson</span>}
                       </span>
-                      <span className="problem-text">{p.text}</span>
+                      <span className="problem-text"><MathText text={p.text} /></span>
                     </span>
                   </button>
                 </li>

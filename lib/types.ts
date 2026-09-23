@@ -26,6 +26,8 @@ export type BoardActionType =
   | "numberLine"
   | "interval"
   | "flow"
+  | "canvas"
+  | "sketch"
   | "mindmap"
   | "add"
   | "narrate"
@@ -66,6 +68,9 @@ export interface BoardAction {
   yMax?: number;
   xLabel?: string;
   yLabel?: string;
+  /** sketch: shape kind (circle, dot, rect, line, arrow, arc, polygon, text) and radius. */
+  kind?: string;
+  r?: number;
   /** Math expression in x for plot, e.g. "(x-2)^2 + 1". */
   fn?: string;
   /** List content for box / timeline ("label: detail") / note bullets. */

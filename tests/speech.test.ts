@@ -15,3 +15,8 @@ test("isEcho ignores Teacher's own voice but not the student's", async () => {
   assert.equal(isEcho("wait why do we subtract first", line), false);
   assert.equal(isEcho("hold on", ""), false);
 });
+
+test("exponents are spoken as powers", () => {
+  assert.match(speakable("Simplify i¹⁴²"), /i to the power of 142/);
+  assert.match(speakable("x^2 + 1"), /x squared/);
+});

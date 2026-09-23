@@ -2,6 +2,7 @@
 
 import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { BOARD_W, pointAt, toD, type Prim, type Pt } from "@/lib/board";
+import { segments } from "@/lib/mathtext";
 
 export interface WhiteboardHandle {
   /** Queue strokes. With `syncMs`, the batch is paced to finish in about that long (to match speech). */
@@ -24,6 +25,10 @@ interface Props {
   /** Student pen mode: pointer draws green ink on the board. */
   penMode?: boolean;
   onInkChange?: (strokes: number) => void;
+  /** The beat being spoken right now: its strokes glow so you can see what the words are about. */
+  focusBeat?: number | null;
+  /** Numbered badges (①②③) next to what each spoken line drew, matching the caption. */
+  tags?: { n: number; x: number; y: number; uid: number }[];
 }
 
 const INK_COLOR = "#12a150";
@@ -53,6 +58,27 @@ function tipOf(p: Prim, t: number): Pt {
   return [BOARD_W * (0.15 + 0.7 * Math.abs(Math.sin(t * Math.PI * 1.5))), 80 + t * 300];
 }
 
+/** Handwritten text with real raised exponents / lowered subscripts. */
+function TextRuns({ text, size }: { text: string; size: number }) {
+  const segs = segments(text);
+  if (segs.length === 1 && segs[0].k === "n") return <>{text}</>;
+  let shift = 0; // current baseline offset, so each run can return to the baseline
+  return (
+    <>
+      {segs.map((s, i) => {
+        const target = s.k === "sup" ? -size * 0.42 : s.k === "sub" ? size * 0.22 : 0;
+        const dy = target - shift;
+        shift = target;
+        return (
+          <tspan key={i} dy={dy || undefined} fontSize={s.k === "n" ? undefined : size * 0.64}>
+            {s.t}
+          </tspan>
+        );
+      })}
+    </>
+  );
+}
+
 function PrimView({ p, t = 1 }: { p: Prim; t?: number }) {
   if (p.kind === "text") {
     const clipId = `clip-${p.key}`;
@@ -76,7 +102,7 @@ function PrimView({ p, t = 1 }: { p: Prim; t?: number }) {
           paintOrder={p.halo ? "stroke" : undefined}
           clipPath={t < 1 ? `url(#${clipId})` : undefined}
         >
-          {p.text}
+          <TextRuns text={p.text} size={p.size} />
         </text>
       </g>
     );
@@ -121,15 +147,36 @@ function PrimView({ p, t = 1 }: { p: Prim; t?: number }) {
   return null;
 }
 
-const DoneLayer = memo(function DoneLayer({ prims }: { prims: Prim[] }) {
+const DoneLayer = memo(function DoneLayer({ prims, focus }: { prims: Prim[]; focus: number | null }) {
   return (
     <g>
-      {prims.map((p) => (
-        <PrimView key={p.key} p={p} />
-      ))}
+      {prims.map((p) =>
+        focus != null && "beat" in p && p.beat === focus ? (
+          <g key={p.key} className="wb-focus">
+            <PrimView p={p} />
+          </g>
+        ) : (
+          <PrimView key={p.key} p={p} />
+        ),
+      )}
     </g>
   );
 });
+
+function BeatTags({ tags, focus }: { tags: NonNullable<Props["tags"]>; focus: number | null }) {
+  return (
+    <g className="wb-tags">
+      {tags.map((t) => (
+        <g key={t.uid} transform={`translate(${t.x} ${t.y})`} className={t.uid === focus ? "wb-tag wb-tag--now" : "wb-tag"}>
+          <circle r={13} />
+          <text textAnchor="middle" y={5.5}>
+            {t.n}
+          </text>
+        </g>
+      ))}
+    </g>
+  );
+}
 
 /** Teacher's glowing stylus, with a mini Teacher riding along. */
 function Marker({ tip, erasing }: { tip: Pt; erasing: boolean }) {
@@ -161,7 +208,7 @@ function Marker({ tip, erasing }: { tip: Pt; erasing: boolean }) {
   );
 }
 
-const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ height, speed, onBusyChange, empty, penMode = false, onInkChange }, ref) {
+const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ height, speed, onBusyChange, empty, penMode = false, onInkChange, focusBeat = null, tags = [] }, ref) {
   const [done, setDone] = useState<Prim[]>([]);
   const [active, setActive] = useState<{ prim: Prim; t: number; tip: Pt } | null>(null);
   const queue = useRef<Prim[]>([]);
@@ -378,9 +425,14 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
         className="wb-svg"
         style={{ aspectRatio: `${BOARD_W} / ${height}`, touchAction: penMode ? "none" : undefined }} viewBox={`0 0 ${BOARD_W} ${height}`} preserveAspectRatio="xMidYMin meet" role="img" aria-label="Whiteboard">
         <g style={{ opacity: 1 - clearing }}>
-          <DoneLayer prims={done} />
+          <DoneLayer prims={done} focus={focusBeat} />
         </g>
-        {active && active.prim.kind !== "clear" && <PrimView p={active.prim} t={active.t} />}
+        {active && active.prim.kind !== "clear" && (
+          <g className={focusBeat != null && "beat" in active.prim && active.prim.beat === focusBeat ? "wb-focus" : undefined}>
+            <PrimView p={active.prim} t={active.t} />
+          </g>
+        )}
+        <BeatTags tags={tags} focus={focusBeat} />
         <g className="wb-ink">
           {ink.map((st, i) =>
             st.length === 1 ? (
