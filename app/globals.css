@@ -1190,7 +1190,7 @@ h3 {
   gap: 10px;
   align-items: baseline;
 }
-.question span {
+.question > span[aria-hidden] {
   flex-shrink: 0;
   display: inline-grid;
   place-items: center;
@@ -1484,3 +1484,19 @@ h3 {
 .problem-card-head strong {
   min-width: 0;
 }
+
+/* Real exponents: consistent font, don't disturb line height. */
+sup, sub { font-size: 0.68em; line-height: 0; position: relative; vertical-align: baseline; }
+sup { top: -0.55em; }
+sub { top: 0.25em; }
+
+/* Tie words to drawings: the strokes for the line being spoken glow, and share a number with the caption. */
+.wb-focus { filter: drop-shadow(0 0 5px rgba(79, 195, 255, 0.95)) drop-shadow(0 0 12px rgba(79, 195, 255, 0.5)); }
+.wb-tag circle { fill: #fff; stroke: #1677e8; stroke-width: 2.5; }
+.wb-tag text { font-family: var(--font-ui), sans-serif; font-size: 15px; font-weight: 800; fill: #1677e8; }
+.wb-tag { opacity: 0.55; transition: opacity 0.3s ease; }
+.wb-tag--now { opacity: 1; }
+.wb-tag--now circle { fill: #1677e8; filter: drop-shadow(0 0 6px rgba(79, 195, 255, 0.9)); }
+.wb-tag--now text { fill: #fff; }
+.beat-badge { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 6px; border-radius: 50%; background: #1677e8; color: #fff; font-size: 12px; font-weight: 800; vertical-align: 2px; }
+.beat--past .beat-badge { background: #b7c9e6; }

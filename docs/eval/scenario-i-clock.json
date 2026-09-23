@@ -1,0 +1,18 @@
+[
+ {"board":[
+   {"type":"narrate","text":"Let's draw the powers of i as a clock, like you asked. First the clock face."},
+   {"type":"canvas","id":"clk","zone":"left","text":"The i-clock"},
+   {"type":"sketch","id":"face","target":"clk","kind":"circle","x":50,"y":50,"r":38,"x2":0,"y2":0,"text":"","items":[],"color":"ink"},
+   {"type":"narrate","text":"i¹ sits at 12 o'clock. Every time the exponent goes up by one, we move one quarter turn clockwise."},
+   {"type":"sketch","id":"p1","target":"clk","kind":"text","x":50,"y":17,"x2":0,"y2":0,"r":0,"text":"i","items":[],"color":"blue"},
+   {"type":"sketch","id":"p2","target":"clk","kind":"text","x":83,"y":50,"x2":0,"y2":0,"r":0,"text":"−1","items":[],"color":"red"},
+   {"type":"narrate","text":"So i² is −1 at 3 o'clock, i³ is −i at 6, and i⁴ is back to 1 at 9."},
+   {"type":"sketch","id":"p3","target":"clk","kind":"text","x":50,"y":85,"x2":0,"y2":0,"r":0,"text":"−i","items":[],"color":"purple"},
+   {"type":"sketch","id":"p4","target":"clk","kind":"text","x":16,"y":50,"x2":0,"y2":0,"r":0,"text":"1","items":[],"color":"green"},
+   {"type":"narrate","text":"This arrow is the key: each step is one quarter turn, so after 4 steps you're back where you started."},
+   {"type":"sketch","id":"","target":"clk","kind":"arc","x":50,"y":50,"r":26,"x2":25,"y2":335,"text":"+1 exponent = ¼ turn","items":[],"color":"orange"},
+   {"type":"narrate","text":"Your turn: i¹⁴². How many full laps is 140, and how many extra quarter turns are left?"},
+   {"type":"write","id":"q","text":"i^142 = i^(140 + 2)","zone":"right","size":"lg","color":"ink"}
+  ],
+  "say":"","phase":"teach","question":"Your turn: where does i^142 land on the clock?","choices":[],"gap":"Powers of i cycle every 4","plan":["Draw the clock","Count laps","Find the leftover"],"step":1,"videos":[],"practice":"Simplify i^142","verdict":"none","insight":"Wants a visual/spatial picture, not just rules"}
+]

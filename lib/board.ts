@@ -7,6 +7,7 @@
 // unit-tested without a browser.
 
 import { compileExpression } from "./expr";
+import { caretToUnicode, plainChar } from "./mathtext";
 import type { BoardAction, InkColor, TextSize, Zone } from "./types";
 
 export const BOARD_W = 1000;
@@ -38,10 +39,24 @@ const GAP = 10;
 export type Pt = [number, number];
 
 export type Prim =
-  | { kind: "path"; key: string; paths: Pt[][]; color: string; width: number; dashed?: boolean; fill?: string; dur: number }
-  | { kind: "text"; key: string; x: number; y: number; text: string; size: number; color: string; w: number; bold?: boolean; halo?: boolean; dur: number }
-  | { kind: "fill"; key: string; x: number; y: number; w: number; h: number; color: string; opacity: number; dur: number }
+  | { kind: "path"; beat?: number; key: string; paths: Pt[][]; color: string; width: number; dashed?: boolean; fill?: string; dur: number }
+  | { kind: "text"; beat?: number; key: string; x: number; y: number; text: string; size: number; color: string; w: number; bold?: boolean; halo?: boolean; dur: number }
+  | { kind: "fill"; beat?: number; key: string; x: number; y: number; w: number; h: number; color: string; opacity: number; dur: number }
   | { kind: "clear"; key: string; dur: number };
+
+/** Bounding box of what a group of primitives draws (ignores clears). */
+export function primsBox(prims: Prim[]): Box | null {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  const take = (x: number, y: number) => {
+    x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+  };
+  for (const p of prims) {
+    if (p.kind === "text") { take(p.x, p.y - p.size); take(p.x + p.w, p.y); }
+    else if (p.kind === "fill") { take(p.x, p.y); take(p.x + p.w, p.y + p.h); }
+    else if (p.kind === "path") for (const seg of p.paths) for (const [x, y] of seg) take(x, y);
+  }
+  return Number.isFinite(x0) ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+}
 
 interface Line {
   text: string;
@@ -54,6 +69,14 @@ interface Line {
 type El =
   | { kind: "text"; text: string; lines: Line[]; box: Box; label: string }
   | { kind: "block"; box: Box; children: string[]; label: string }
+  | {
+      /** A free drawing area: 100×100 units, x to the right, y down. */
+      kind: "canvas";
+      box: Box;
+      unit: number;
+      shapes: string[];
+      label: string;
+    }
   | {
       /** A cause→effect / process chain, or a mind map, that pieces can be added to one at a time. */
       kind: "diagram";
@@ -224,7 +247,10 @@ const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 
 /** Case-, dash- and whitespace-insensitive search. Returns [start, end) in the original string. */
 export function findLoose(hay: string, needle: string): [number, number] | null {
-  const canon = (c: string) => (/[−–—]/.test(c) ? "-" : /[×·]/.test(c) ? "*" : c.toLowerCase());
+  const canon = (c: string) => {
+    const p = plainChar(c);
+    return /[−–—]/.test(p) ? "-" : /[×·]/.test(p) ? "*" : p.toLowerCase();
+  };
   const map: number[] = [];
   let flat = "";
   for (let i = 0; i < hay.length; i++) {
@@ -232,7 +258,7 @@ export function findLoose(hay: string, needle: string): [number, number] | null 
     flat += canon(hay[i]);
     map.push(i);
   }
-  const n = [...needle].filter((c) => !/\s/.test(c)).map(canon).join("");
+  const n = [...caretToUnicode(needle)].filter((c) => !/\s/.test(c)).map(canon).join("");
   if (!n) return null;
   const at = flat.indexOf(n);
   if (at < 0) return null;
@@ -528,7 +554,13 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
     s.els[nlId] = { ...nl, rows: [...nl.rows, raw] };
   };
 
-  for (const a of actions) {
+  for (const raw of actions) {
+    // x^2 → x² everywhere text is drawn, so it measures and renders as a real exponent.
+    const a: BoardAction = {
+      ...raw,
+      ...(typeof raw.text === "string" ? { text: caretToUnicode(raw.text) } : {}),
+      ...(Array.isArray(raw.items) ? { items: raw.items.map((it) => (typeof it === "string" ? caretToUnicode(it) : it)) } : {}),
+    };
     if (a.type !== "tAccount") s.row = null;
     const text = (a.text ?? "").toString().slice(0, 400);
 
@@ -1051,6 +1083,107 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
         break;
       }
 
+      case "canvas": {
+        const zone = zoneOf(a.zone, "left");
+        const z = ZONES[zone];
+        let top = topOf(zone) + 6;
+        if (text) {
+          addText(text, z.x, top + FONT.sm, FONT.sm, INK.ink, true);
+          top += FONT.sm * 1.7;
+        }
+        const side = Math.min(z.w, 380);
+        const x0 = zone === "full" ? z.x + (z.w - side) / 2 : z.x;
+        const box: Box = { x: x0, y: top + 4, w: side, h: side };
+        register(a.id || undefined, { kind: "canvas", box, unit: side / 100, shapes: [], label: text }, "c");
+        advance(zone, box.y + box.h + 6);
+        break;
+      }
+
+      case "sketch": {
+        const cid = a.target && s.els[a.target]?.kind === "canvas" ? a.target : [...s.order].reverse().find((id) => s.els[id]?.kind === "canvas");
+        const cv = cid ? s.els[cid] : undefined;
+        if (!cid || !cv || cv.kind !== "canvas") break;
+        const u = cv.unit;
+        const num = (v: number | undefined, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
+        const P = (x: number, y: number): Pt => [cv.box.x + Math.max(-5, Math.min(105, x)) * u, cv.box.y + Math.max(-5, Math.min(105, y)) * u];
+        const color = colorOf(a.color, "ink");
+        const kind = String(a.kind || "line");
+        const x = num(a.x, 50);
+        const y = num(a.y, 50);
+        const r = Math.max(0.5, num(a.r, 10));
+        let bb: Box | null = null;
+        const ring = (cx: number, cy: number, rr: number, n = 40): Pt[] => {
+          const pts: Pt[] = [];
+          for (let k = 0; k <= n; k++) {
+            const t = -Math.PI / 2 + (k / n) * Math.PI * 2;
+            const wob = 1 + 0.01 * Math.sin(t * 3 + 0.7);
+            pts.push(P(cx + Math.cos(t) * rr * wob, cy + Math.sin(t) * rr * wob));
+          }
+          return pts;
+        };
+        if (kind === "circle") {
+          addPath([ring(x, y, r, Math.max(48, Math.round(r * u * 0.5)))], color, 3);
+          bb = { x: P(x - r, 0)[0], y: P(0, y - r)[1], w: 2 * r * u, h: 2 * r * u };
+        } else if (kind === "dot") {
+          const rr = Math.max(1.4, Math.min(r, 3));
+          addPath([ring(x, y, rr, 16)], color, 3, { fill: color, dur: 200 });
+          bb = { x: P(x - rr, 0)[0], y: P(0, y - rr)[1], w: 2 * rr * u, h: 2 * rr * u };
+        } else if (kind === "rect") {
+          const x2 = num(a.x2, x + 20);
+          const y2 = num(a.y2, y + 20);
+          const [ax, ay] = P(Math.min(x, x2), Math.min(y, y2));
+          const [bx, by] = P(Math.max(x, x2), Math.max(y, y2));
+          bb = { x: ax, y: ay, w: bx - ax, h: by - ay };
+          addPath(rectPath(bb, rand), color, 3);
+        } else if (kind === "line" || kind === "arrow") {
+          const p0 = P(x, y);
+          const p1 = P(num(a.x2, x + 20), num(a.y2, y));
+          addPath([handLine(p0, p1, rand, 0.6), ...(kind === "arrow" ? arrowHead(p1, p0, 12) : [])], color, 3);
+          bb = { x: Math.min(p0[0], p1[0]), y: Math.min(p0[1], p1[1]), w: Math.abs(p1[0] - p0[0]) || 4, h: Math.abs(p1[1] - p0[1]) || 4 };
+        } else if (kind === "arc") {
+          // Clock-style angles: 0° = 12 o'clock, increasing clockwise. Arrowhead at the end.
+          const from = num(a.x2, 0);
+          let to = num(a.y2, 90);
+          if (Math.abs(to - from) < 1) to = from + 90;
+          const n = Math.max(8, Math.round(Math.abs(to - from) / 6));
+          const pts: Pt[] = [];
+          for (let k = 0; k <= n; k++) {
+            const deg = from + ((to - from) * k) / n;
+            const rad = ((deg - 90) * Math.PI) / 180;
+            pts.push(P(x + Math.cos(rad) * r, y + Math.sin(rad) * r));
+          }
+          addPath([pts, ...arrowHead(pts[pts.length - 1], pts[pts.length - 3], 12)], color, 3);
+          const xs = pts.map((p) => p[0]);
+          const ys = pts.map((p) => p[1]);
+          bb = { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs) || 4, h: Math.max(...ys) - Math.min(...ys) || 4 };
+        } else if (kind === "polygon") {
+          const pts = list(a.items)
+            .map((it) => String(it).split(/[,\s]+/).map(Number))
+            .filter((q) => q.length >= 2 && q.every(Number.isFinite))
+            .map((q) => P(q[0], q[1]));
+          if (pts.length >= 2) {
+            addPath([[...pts, pts[0]]], color, 3);
+            const xs = pts.map((p) => p[0]);
+            const ys = pts.map((p) => p[1]);
+            bb = { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+          }
+        } else if (kind === "text" && text) {
+          const size = a.r && a.r >= 3 && a.r <= 12 ? Math.round(a.r * u * 0.9) : FONT.md;
+          const w = measure(text, size);
+          const [cx, cy] = P(x, y);
+          addText(text, cx - w / 2, cy + size * 0.35, size, color);
+          bb = { x: cx - w / 2, y: cy - size * 0.7, w, h: size * 1.1 };
+          register(a.id || undefined, { kind: "text", text, lines: [{ text, x: cx - w / 2, y: cy + size * 0.35, size, start: 0 }], box: bb, label: text }, "t");
+        }
+        if (!bb) break;
+        if (kind !== "text") {
+          if (text) placeLabel(text, [bb.x + bb.w, bb.y + 4], color, { x: cv.box.x - 60, y: cv.box.y - 20, w: cv.box.w + 260, h: cv.box.h + 40 });
+          register(a.id || `${cid}.${cv.shapes.length + 1}`, { kind: "block", box: bb, children: [], label: `${kind}${text ? ` "${text}"` : ""}` }, "t");
+        }
+        s.els[cid] = { ...cv, shapes: [...cv.shapes, `${kind}${text ? ` "${text.slice(0, 20)}"` : ""}`] };
+        break;
+      }
+
       case "flow":
       case "mindmap": {
         const zone = zoneOf(a.zone, "full");
@@ -1239,6 +1372,8 @@ export function describeBoard(s: BoardState): string {
     if (id.includes(".") && !/\.title$/.test(id)) continue; // children are implied by their parent
     if (el.kind === "text") lines.push(`- ${id}: "${el.text.slice(0, 80)}"`);
     else if (el.kind === "graph") lines.push(`- ${id}: ${el.label}`);
+    else if (el.kind === "canvas")
+      lines.push(`- ${id}: drawing area "${el.label}" (100×100, x right, y down); ${el.shapes.length ? el.shapes.map((sh, i) => `${i + 1} ${sh}`).join(", ") : "empty"}`);
     else if (el.kind === "diagram")
       lines.push(
         `- ${id}: ${el.style === "flow" ? "flow chain" : "mind map"} "${el.label}"; ${el.items.map((t, i) => `${i + 1} = ${t.slice(0, 40)}`).join(", ") || "(empty)"}; ${el.slots.length - el.used} free slot(s). Pieces: ${id}.<n>${el.style === "mindmap" ? `, center: ${id}.center` : ""}`,

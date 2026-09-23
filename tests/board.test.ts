@@ -144,3 +144,31 @@ test("flow chains grow row by row and mind maps take branches", () => {
   const mm = r.state.els["mm"].box;
   assert.ok(mm.y >= c6.y + c6.h, "mind map sits below the grown chain");
 });
+
+test("canvas + sketch can draw a clock (circle, labels, arc arrow)", () => {
+  const r = applyActions(emptyBoard(), [
+    { type: "canvas", id: "clk", zone: "left", text: "i-clock" },
+    { type: "sketch", id: "face", target: "clk", kind: "circle", x: 50, y: 50, r: 38 },
+    { type: "sketch", id: "top", target: "clk", kind: "text", x: 50, y: 18, text: "i" },
+    { type: "sketch", id: "", target: "clk", kind: "arc", x: 50, y: 50, r: 28, x2: 20, y2: 340, text: "× i each step" },
+    { type: "sketch", id: "", target: "clk", kind: "polygon", items: ["10,90", "30,90", "20,70"] },
+    { type: "sketch", id: "", target: "missing", kind: "bogus" },
+  ] as never);
+  assert.ok(r.state.els.face && r.state.els.top && r.state.els["clk.3"]);
+  assert.match(describeBoard(r.state), /drawing area "i-clock"/);
+  for (const p of r.prims) if (p.kind === "path") for (const seg of p.paths) for (const pt of seg) assert.ok(pt.every(Number.isFinite));
+});
+
+test("exponents: caret becomes superscript, matching still finds it", async () => {
+  const { segments, caretToUnicode } = await import("../lib/mathtext");
+  assert.equal(caretToUnicode("i^142"), "i¹⁴²");
+  assert.deepEqual(segments("i¹⁴²"), [{ t: "i", k: "n" }, { t: "142", k: "sup" }]);
+  assert.deepEqual(segments("H₂O").map((s) => s.k), ["n", "sub", "n"]);
+  const r = applyActions(emptyBoard(), [{ type: "write", id: "e", text: "Simplify i^142" }, { type: "circle", target: "e", match: "142" }]);
+  assert.equal(r.prims.filter((p) => p.kind === "path").length, 1);
+});
+
+test("caret groups with spaces become superscripts", async () => {
+  const { caretToUnicode } = await import("../lib/mathtext");
+  assert.equal(caretToUnicode("i^(140 + 2)"), "i⁽¹⁴⁰⁺²⁾");
+});
