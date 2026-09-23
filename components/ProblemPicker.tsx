@@ -1,17 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import TopBar, { StatusPill } from "./TopBar";
 import type { AppStatus, Engine } from "./SidecarApp";
 import { getDemo } from "@/lib/demo";
-import type { Assignment, Preferences, Problem, TeachingFormat } from "@/lib/types";
-
-const FORMATS: { id: TeachingFormat; icon: string; label: string; desc: string }[] = [
-  { id: "visual", icon: "✏️", label: "Draw it out", desc: "Pictures, graphs and circled steps on the board" },
-  { id: "example", icon: "🧮", label: "Show me an example", desc: "A worked twin problem first, then yours" },
-  { id: "analogy", icon: "🍕", label: "Real-life analogy", desc: "Connect it to something familiar first" },
-  { id: "socratic", icon: "💬", label: "Ask me questions", desc: "Small hints; you do each step yourself" },
-];
+import { forgetLearner, loadLearner } from "@/lib/profile";
+import type { Assignment, Preferences, Problem } from "@/lib/types";
 
 export default function ProblemPicker({
   assignment,
@@ -35,6 +29,8 @@ export default function ProblemPicker({
   const demo = getDemo(assignment.demoId);
   const live = Boolean(status?.live);
   const [preferDemo, setPreferDemo] = useState(false);
+  const [learner, setLearner] = useState<string[]>([]);
+  useEffect(() => setLearner(loadLearner()), []);
 
   const hasScript = (p: Problem | null) => Boolean(p && demo && demo.lesson.problemId === p.id);
   const engineFor = (p: Problem | null): Engine | null => {
@@ -89,27 +85,30 @@ export default function ProblemPicker({
         </section>
 
         <aside className="picker-side card">
-          <h2>How should Teacher start?</h2>
-          <p className="muted small">
-            Just a starting point, not a fixed &ldquo;learning style.&rdquo; Teacher adapts as you ask questions, and you can say &ldquo;show me differently&rdquo; anytime.
-          </p>
-          <div className="formats">
-            {FORMATS.map((f) => (
-              <button
-                key={f.id}
-                className={`format ${prefs.format === f.id ? "format--active" : ""}`}
-                onClick={() => setPrefs({ format: f.id })}
-                aria-pressed={prefs.format === f.id}
-              >
-                <span className="format-icon" aria-hidden>
-                  {f.icon}
-                </span>
-                <span>
-                  <strong>{f.label}</strong>
-                  <small>{f.desc}</small>
-                </span>
-              </button>
-            ))}
+          <h2>Your Teacher</h2>
+          <p className="muted small">Teacher works through it with you on the whiteboard, and adapts to how you learn as you ask questions.</p>
+          <div className="learner-card">
+            <strong>🧠 What Teacher has learned about you</strong>
+            {learner.length ? (
+              <>
+                <ul>
+                  {learner.slice(0, 5).map((n) => (
+                    <li key={n}>{n}</li>
+                  ))}
+                </ul>
+                <button
+                  className="link-back small"
+                  onClick={() => {
+                    forgetLearner();
+                    setLearner([]);
+                  }}
+                >
+                  Forget this
+                </button>
+              </>
+            ) : (
+              <p className="muted small">Nothing yet. As you work, Teacher notes what helps you learn, like &ldquo;wants the why behind each step.&rdquo; It stays on this device only.</p>
+            )}
           </div>
 
           <div className="toggles">

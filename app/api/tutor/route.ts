@@ -54,6 +54,10 @@ export async function POST(req: Request) {
     String(body.boardSummary ?? ""),
     String(body.studentMessage ?? ""),
     image,
+    (Array.isArray(body.learner) ? body.learner : [])
+      .filter((n): n is string => typeof n === "string")
+      .map((n) => n.slice(0, 120))
+      .slice(0, 12),
   ) as Anthropic.MessageParam[];
   const schema = tutorTurnSchema as unknown as Record<string, unknown>;
   const haiku = /haiku/i.test(MODEL);

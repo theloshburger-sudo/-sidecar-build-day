@@ -55,6 +55,19 @@ type El =
   | { kind: "text"; text: string; lines: Line[]; box: Box; label: string }
   | { kind: "block"; box: Box; children: string[]; label: string }
   | {
+      /** A cause→effect / process chain, or a mind map, that pieces can be added to one at a time. */
+      kind: "diagram";
+      style: "flow" | "mindmap";
+      zone: Zone;
+      box: Box;
+      slots: Box[];
+      used: number;
+      center: Box | null;
+      color: string;
+      items: string[];
+      label: string;
+    }
+  | {
       /** A number line that intervals can be added to, one row at a time. */
       kind: "nline";
       box: Box;
@@ -413,6 +426,71 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
     g.plot.x + ((x - g.xMin) / (g.xMax - g.xMin)) * g.plot.w,
     g.plot.y + g.plot.h - ((y - g.yMin) / (g.yMax - g.yMin)) * g.plot.h,
   ];
+
+  /** Add one piece to a flow chain (box + arrow from the previous box) or a mind map (branch + box). */
+  const addDiagramPiece = (dId: string, raw: string, color: InkColor | undefined) => {
+    let d = s.els[dId];
+    if (!d || d.kind !== "diagram") return;
+    if (d.used >= d.slots.length && d.style === "flow" && d.used < 12) {
+      // Grow the chain by one row, as long as nothing has been drawn below it yet.
+      const bottom = d.box.y + d.box.h;
+      if (Math.abs(topOf(d.zone) - (bottom + GAP)) < 2) {
+        const perRow = d.zone === "full" ? 4 : 2;
+        const first = d.slots[0];
+        const lastRowY = d.slots[d.slots.length - 1].y;
+        const extra: Box[] = [];
+        for (let c = 0; c < perRow; c++) extra.push({ x: d.slots[c]?.x ?? first.x, y: lastRowY + first.h + 48, w: first.w, h: first.h });
+        const grown = { ...d, slots: [...d.slots, ...extra], box: { ...d.box, h: d.box.h + first.h + 48 } };
+        s.els[dId] = grown;
+        d = grown;
+        advance(d.zone, d.box.y + d.box.h);
+      }
+    }
+    if (d.used >= d.slots.length) return;
+    const n = d.used + 1;
+    const b = d.slots[d.used];
+    const c = color ? INK[color] : d.color;
+    if (d.style === "flow" && d.used > 0) {
+      const prev = d.slots[d.used - 1];
+      if (Math.abs(prev.y - b.y) < 2) {
+        const p0: Pt = [prev.x + prev.w + 6, prev.y + prev.h / 2];
+        const p1: Pt = [b.x - 8, b.y + b.h / 2];
+        addPath([handLine(p0, p1, rand, 0.5), ...arrowHead(p1, p0, 11)], INK.ink, 2.6, { dur: 260 });
+      } else {
+        // wrap to the next row: out of the bottom of the last box, across, into the top of the next
+        const p0: Pt = [prev.x + prev.w / 2, prev.y + prev.h + 4];
+        const p1: Pt = [b.x + b.w / 2, b.y - 6];
+        const curve = quad(p0, [p1[0], p0[1] + (p1[1] - p0[1]) * 0.45], p1, 32);
+        addPath([curve, ...arrowHead(p1, curve[curve.length - 3], 11)], INK.ink, 2.6, { dur: 420 });
+      }
+    }
+    if (d.style === "mindmap" && d.center) {
+      const cc: Pt = [d.center.x + d.center.w / 2, d.center.y + d.center.h / 2];
+      const bc: Pt = [b.x + b.w / 2, b.y + b.h / 2];
+      // leave the center ellipse at its edge, stop at the box edge
+      const ang = Math.atan2(bc[1] - cc[1], bc[0] - cc[0]);
+      const p0: Pt = [cc[0] + Math.cos(ang) * (d.center.w / 2 + 4), cc[1] + Math.sin(ang) * (d.center.h / 2 + 4)];
+      const tx = Math.abs(Math.cos(ang)) > 0.35 ? (bc[0] < cc[0] ? b.x + b.w + 4 : b.x - 4) : bc[0];
+      const ty = Math.abs(Math.cos(ang)) > 0.35 ? bc[1] : bc[1] < cc[1] ? b.y + b.h + 4 : b.y - 4;
+      addPath([handLine(p0, [tx, ty], rand, 0.8)], c, 3, { dur: 260 });
+    }
+    addPath(rectPath(b, rand), c, 2.6, { dur: 380 });
+    let size = FONT.sm;
+    let lines = wrap(raw, b.w - 18, size, measure);
+    while (size > 14 && lines.length * size * 1.25 > b.h - 12) {
+      size -= 1;
+      lines = wrap(raw, b.w - 18, size, measure);
+    }
+    const lh = size * 1.25;
+    const startY = b.y + (b.h - lines.length * lh) / 2 + size * 0.95;
+    const placed: Line[] = lines.map((l, i) => {
+      const w = measure(l.text, size);
+      return { text: l.text, start: l.start, x: b.x + (b.w - w) / 2, y: startY + i * lh, size };
+    });
+    for (const l of placed) addText(l.text, l.x, l.y, size, INK.ink);
+    register(`${dId}.${n}`, { kind: "text", text: raw, lines: placed, box: b, label: raw }, "t");
+    s.els[dId] = { ...d, used: n, items: [...d.items, raw] };
+  };
 
   /** Add one interval row to a number line: name, bar, guides to the axis, then open/closed endpoints. */
   const drawInterval = (nlId: string, raw: string, color: InkColor | undefined) => {
@@ -973,6 +1051,83 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
         break;
       }
 
+      case "flow":
+      case "mindmap": {
+        const zone = zoneOf(a.zone, "full");
+        const z = ZONES[zone];
+        const items = list(a.items).slice(0, 8).map(String);
+        let top = topOf(zone) + 6;
+        if (text && a.type === "flow") {
+          addText(text, z.x, top + FONT.sm, FONT.sm, INK.ink, true);
+          top += FONT.sm * 1.7;
+        }
+        const color = a.color && a.color !== "ink" ? INK[a.color] : INK.blue;
+        const dId = (a.id || "").trim() || `${a.type === "flow" ? "f" : "m"}${s.seq + 1}`;
+        const slots: Box[] = [];
+        let center: Box | null = null;
+        let bottom = top;
+        if (a.type === "flow") {
+          const perRow = zone === "full" ? 4 : 2;
+          const gapX = 46;
+          const bw = (z.w - (perRow - 1) * gapX) / perRow;
+          const bh = 96;
+          const count = Math.min(12, Math.max(perRow, Math.ceil(items.length / perRow) * perRow));
+          for (let i = 0; i < count; i++) {
+            const r = Math.floor(i / perRow);
+            const c = i % perRow;
+            slots.push({ x: z.x + c * (bw + gapX), y: top + 6 + r * (bh + 48), w: bw, h: bh });
+          }
+          bottom = slots[slots.length - 1].y + bh + 8;
+        } else {
+          const cw = Math.min(260, z.w * 0.4);
+          const ch = 70;
+          const cx = z.x + z.w / 2;
+          const cy = top + 190;
+          center = { x: cx - cw / 2, y: cy - ch / 2, w: cw, h: ch };
+          const bw = zone === "full" ? 230 : 170;
+          const bh = 74;
+          const dx = zone === "full" ? z.w / 2 - bw / 2 : z.w / 2 - bw / 2;
+          const spots: Pt[] = [
+            [cx + dx, cy - 105],
+            [cx - dx, cy - 105],
+            [cx + dx, cy + 105],
+            [cx - dx, cy + 105],
+            [cx, cy - 160],
+            [cx, cy + 160],
+          ];
+          for (const [x, y] of spots) slots.push({ x: x - bw / 2, y: y - bh / 2, w: bw, h: bh });
+          bottom = cy + 160 + bh / 2 + 10;
+          // center bubble
+          const ring: Pt[] = [];
+          for (let k = 0; k <= 40; k++) {
+            const t = (k / 40) * Math.PI * 2 + 0.3;
+            ring.push([cx + Math.cos(t) * (cw / 2) * (1 + 0.02 * Math.sin(k)), cy + Math.sin(t) * (ch / 2)]);
+          }
+          addPath([ring], color, 3.2);
+          const label = text || "Main idea";
+          let size = FONT.md;
+          while (size > 16 && measure(label, size) > cw - 26) size -= 1;
+          const lw = measure(label, size);
+          addText(label, cx - lw / 2, cy + size * 0.35, size, color, true);
+          register(`${dId}.center`, { kind: "text", text: label, lines: [{ text: label, x: cx - lw / 2, y: cy + size * 0.35, size, start: 0 }], box: center, label }, "t");
+        }
+        register(dId, { kind: "diagram", style: a.type, zone, box: { x: z.x, y: top, w: z.w, h: bottom - top }, slots, used: 0, center, color, items: [], label: text }, a.type === "flow" ? "f" : "m");
+        advance(zone, bottom);
+        for (const it of items) addDiagramPiece(dId, it, undefined);
+        break;
+      }
+
+      case "add": {
+        // Add the next piece to a number line (an interval), a flow chain (a step) or a mind map (a branch).
+        const kinds = ["nline", "diagram"];
+        const target = a.target && kinds.includes(s.els[a.target]?.kind ?? "") ? a.target : [...s.order].reverse().find((id) => kinds.includes(s.els[id]?.kind ?? ""));
+        if (!target || !text) break;
+        const col = a.color && a.color !== "ink" ? a.color : undefined;
+        if (s.els[target].kind === "nline") drawInterval(target, text, col);
+        else addDiagramPiece(target, text, col);
+        break;
+      }
+
       case "interval": {
         const target = a.target && s.els[a.target]?.kind === "nline" ? a.target : [...s.order].reverse().find((id) => s.els[id]?.kind === "nline");
         if (!target || !text) break;
@@ -1084,6 +1239,10 @@ export function describeBoard(s: BoardState): string {
     if (id.includes(".") && !/\.title$/.test(id)) continue; // children are implied by their parent
     if (el.kind === "text") lines.push(`- ${id}: "${el.text.slice(0, 80)}"`);
     else if (el.kind === "graph") lines.push(`- ${id}: ${el.label}`);
+    else if (el.kind === "diagram")
+      lines.push(
+        `- ${id}: ${el.style === "flow" ? "flow chain" : "mind map"} "${el.label}"; ${el.items.map((t, i) => `${i + 1} = ${t.slice(0, 40)}`).join(", ") || "(empty)"}; ${el.slots.length - el.used} free slot(s). Pieces: ${id}.<n>${el.style === "mindmap" ? `, center: ${id}.center` : ""}`,
+      );
     else if (el.kind === "nline")
       lines.push(
         `- ${id}: number line ${fmt(el.lo)}..${fmt(el.hi)}; rows ${el.rows.map((r, i) => `${i + 1} = ${r}`).join(", ") || "(none yet)"}; ${el.slots - el.rows.length} free row(s). Endpoints: ${id}.<row>.lo / .hi, bars: ${id}.<row>.bar`,

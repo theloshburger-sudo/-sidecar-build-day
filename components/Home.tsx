@@ -103,6 +103,8 @@ export default function Home({ status, onAssignment }: { status: AppStatus | nul
             </p>
             <ul className="trust">
               <li>🔒 No account. Sidecar never saves your work on a server.</li>
+              <li>📚 Any subject: math, science, history, essays, architecture</li>
+              <li>🧠 Learns how you learn, as you go</li>
               <li>🎙️ Type or talk, whichever you like</li>
             </ul>
           </div>

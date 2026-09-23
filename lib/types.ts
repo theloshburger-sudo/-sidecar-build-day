@@ -25,6 +25,9 @@ export type BoardActionType =
   | "timeline"
   | "numberLine"
   | "interval"
+  | "flow"
+  | "mindmap"
+  | "add"
   | "narrate"
   | "askQuestion"
   | "clear";
@@ -94,6 +97,8 @@ export interface TutorTurn {
   videos: VideoSuggestion[];
   practice: string;
   verdict: Verdict;
+  /** One new observation about how this student learns best ("" if nothing new). */
+  insight: string;
 }
 
 export type TeachingFormat = "visual" | "example" | "analogy" | "socratic";
@@ -136,4 +141,6 @@ export interface TutorRequest {
   studentMessage: string;
   /** JPEG data URL of the whiteboard when the student drew on it. */
   image?: string;
+  /** What Teacher has learned about this student (kept on their device). */
+  learner?: string[];
 }

@@ -65,16 +65,17 @@ await page.getByRole("button", { name: /ECON/ }).click();
 await page.locator(".problem").first().click();
 await page.getByRole("button", { name: /Start with Teacher/ }).click();
 await page.waitForTimeout(4500);
+// Focus mode is on by default; toggling it shows and hides the side panel.
+check("focus mode is on by default", !(await page.locator(".side").isVisible()));
 await page.getByRole("button", { name: /Focus/ }).click();
 await page.waitForTimeout(300);
-check("focus mode hides side panel", !(await page.locator(".side").isVisible()));
+check("turning focus off shows the side panel", await page.locator(".side").isVisible());
 await page.screenshot({ path: `${OUT}/u3-focus.png` });
 await page.setViewportSize({ width: 390, height: 844 });
 await page.waitForTimeout(400);
 const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 check(`phone width has no horizontal scroll (overflow ${overflow}px)`, overflow <= 1);
 await page.screenshot({ path: `${OUT}/u4-phone.png`, fullPage: true });
-await page.getByRole("button", { name: /Focus/ }).click();
 
 console.log("page errors:", errors.length ? errors : "none");
 await browser.close();

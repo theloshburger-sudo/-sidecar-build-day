@@ -1465,3 +1465,22 @@ h3 {
 .icon-btn--wide { width: auto; padding: 0 12px; font-size: 13px; font-weight: 700; white-space: nowrap; }
 .icon-btn--live { background: #e6f8ee; border-color: #9fdcb8; color: #0f7a3d; box-shadow: 0 0 0 3px rgba(18, 161, 80, 0.12); animation: rec 1.6s ease-in-out infinite; }
 .demo-emoji--intervals { background: #e6f8ee; color: #0f7a3d; }
+
+.learner-card { margin: 14px 0 4px; padding: 12px 14px; border-radius: 14px; background: linear-gradient(135deg, #eef6ff, #f3efff); border: 1px solid #d8e3fa; }
+.learner-card strong { font-size: 14px; }
+.learner-card ul { margin: 8px 0 4px; padding-left: 18px; font-size: 13.5px; }
+.learner-card li { margin: 2px 0; }
+.learner-chip { position: relative; }
+.learner-chip > button { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.learner-chip--new > button { animation: learned 1.4s ease 2; }
+@keyframes learned { 50% { box-shadow: 0 0 0 5px rgba(122, 90, 240, 0.18), 0 0 22px rgba(122, 90, 240, 0.35); } }
+.learner-pop { position: absolute; top: calc(100% + 8px); left: 0; z-index: 30; width: 320px; padding: 12px 14px; border-radius: 14px; background: #fff; border: 1px solid var(--line); box-shadow: 0 18px 40px rgba(31, 45, 58, 0.16); font-size: 13.5px; }
+.learner-pop ul { margin: 6px 0 8px; padding-left: 18px; }
+.learner-pop p { margin: 4px 0 0; }
+.demo-emoji--history { background: #fdecea; color: #b4412c; }
+/* Grid/flex children must be allowed to shrink below their longest word on phones. */
+.session > *,
+.side > *,
+.problem-card-head strong {
+  min-width: 0;
+}

@@ -20,6 +20,17 @@ Flow (the "phase" field):
 4. practice — When the original problem is done, give ONE different but related quick problem in "practice" (fully stated, 1–3 minutes). Grade it with "verdict".
 5. wrapup — Two sentences: the key idea in one line, and what to watch for next time.
 
+# Any subject
+Work through ANY homework the student brings: math, science, history, English, architecture, economics, business, languages. Same "I do, you do" coaching, with the right picture for the subject:
+- History / social studies: a "flow" chain for cause → effect (each arrow is a "because"), a "timeline" for dates, a "mindmap" for factors (e.g. the causes of a war), a "table" to compare. The student's turn is to explain a link in their own words or pick the evidence.
+- Essays and writing (English, history, any "explain"/"analyze" prompt): coach, never ghost-write. Build the thesis + evidence outline with them on the board (box/flow), highlight key words in the prompt, then have them write each sentence and give specific feedback. Never write the essay or paragraph for them.
+- Architecture / design / engineering: "mindmap" or "flow" for concepts and load paths, "table" for comparing systems, "box" for principles, simple "drawLine" sketches when a shape really helps.
+- Science: "flow" for processes (photosynthesis, cell cycle), "table" for comparisons, "graph" for data, balanced equations with "write".
+- Business / accounting / economics: "tAccount", "table", "graph", "flow" for how money or goods move.
+
+# Learning about this student
+You'll get notes on how this student learns best (from earlier turns and sessions). Use them: e.g. if they like real-life analogies, open with one; if they mix up a specific idea, check it proactively; if they want the "why", always give it. Each turn, set "insight" to ONE new short observation about how they learn (≤ 12 words, e.g. "Wants the reason behind each step", "Gets endpoints right when shown a picture", "Rushes; double-check signs"), or "" if you learned nothing new or it's already noted. Only learning habits, never personal details, feelings or guesses about who they are.
+
 # Hard rules
 - One idea per turn. 1–3 beats. No side lessons unless the student's mistake shows they need it.
 - The student should write math/answers, not pick them: use "choices" ONLY for quick non-math taps (where are you stuck, ready to try one?). For "your turn" steps, choices must be [].
@@ -69,6 +80,9 @@ Action types. Every action must include ALL fields listed for its type; use "" (
 - tAccount {id, text: account name, debits: [...], credits: [...]} — T-accounts sit side by side automatically.
 - timeline {id, text: title, items: ["label: detail", ...]} — dates, accrual periods, historical events, process steps.
 - numberLine {id, zone, xMin, xMax, text: title, items} — USE THIS (not graph) for intervals, inequalities, unions/intersections. Draw it with items [] (just the axis), then add each interval with its own "interval" action in its own beat so you can explain it. Room for up to 3 rows (more if items are given).
+- flow {id, text: title, items, zone, color} — a chain of boxes joined by arrows (cause → effect, process steps). Start with items [] and "add" one box per beat so you can explain each arrow ("…and BECAUSE of that…"). Pieces: "<id>.1", "<id>.2"...
+- mindmap {id, text: center idea, items, zone, color} — a central bubble with up to 6 branches (factors, themes, parts of a design). Start with items [] and "add" branches one per beat. Pieces: "<id>.1"..., center: "<id>.center".
+- add {target, text, color} — adds the next piece to a flow (box), mindmap (branch) or numberLine (interval, e.g. "J: (−3, 2)").
 - interval {target: numberLineId, text: "J: (−3, 2)" or "x ≥ 4", color} — adds one row: label, bar, dashed guides down to the axis, then the endpoints (● closed, ○ open). Row n's pieces are "<nlId>.<n>.bar", "<nlId>.<n>.lo", "<nlId>.<n>.hi" (point arrows/circles at them).
 - narrate {text} — a spoken line (not drawn). Starts a new beat; the actions after it are drawn while it is spoken.
 - askQuestion {text} — writes a very short prompt on the board in purple (≤ 30 characters, e.g. "I ∪ J = ?"). The full question goes in "question".
@@ -78,7 +92,7 @@ Action types. Every action must include ALL fields listed for its type; use "" (
 # Output
 Respond with ONLY the JSON object matching the schema. Every field is required; use "" / [] / 0 / "none" when not applicable.`;
 
-export function firstMessage(problem: Problem, prefs: Preferences): string {
+export function firstMessage(problem: Problem, prefs: Preferences, learner: string[] = []): string {
   return [
     `Here is the exact problem I'm stuck on (subject: ${problem.subject || "unknown"}):`,
     "",
@@ -86,6 +100,7 @@ export function firstMessage(problem: Problem, prefs: Preferences): string {
     "",
     `My preferred way to start: ${prefs.format}. ${FORMAT_HINT[prefs.format]}`,
     prefs.pace === "slow" ? "Please go slowly with extra-small steps." : "",
+    learner.length ? `What you've learned about how I learn (from earlier sessions):\n${learner.map((n) => `- ${n}`).join("\n")}` : "",
     "",
     "Start the session: greet me in a few words, draw the problem's key part on the board (write the equation, set up the givens, or put the sets on a number line), and ask where I'm stuck.",
   ]
@@ -107,8 +122,9 @@ export function toMessages(
   boardSummary: string,
   studentMessage: string,
   image?: string,
+  learner: string[] = [],
 ): { role: "user" | "assistant"; content: MessageContent }[] {
-  const base = textMessages(problem, prefs, history, boardSummary, studentMessage);
+  const base = textMessages(problem, prefs, history, boardSummary, studentMessage, learner);
   const m = image ? /^data:(image\/(?:jpeg|png));base64,([A-Za-z0-9+/=]+)$/.exec(image) : null;
   if (!m) return base;
   const last = base[base.length - 1];
@@ -130,8 +146,9 @@ function textMessages(
   history: ChatEntry[],
   boardSummary: string,
   studentMessage: string,
+  learner: string[] = [],
 ): { role: "user" | "assistant"; content: string }[] {
-  const msgs: { role: "user" | "assistant"; content: string }[] = [{ role: "user", content: firstMessage(problem, prefs) }];
+  const msgs: { role: "user" | "assistant"; content: string }[] = [{ role: "user", content: firstMessage(problem, prefs, learner) }];
   // Keep the conversation bounded: the first turns + the most recent ones.
   const trimmed = history.length > 24 ? [...history.slice(0, 2), ...history.slice(-20)] : history;
   for (const entry of trimmed) {
@@ -146,6 +163,7 @@ function textMessages(
         plan: t.plan,
         step: t.step,
         practice: t.practice,
+        insight: t.insight ?? "",
         board: t.board.filter((b) => b.type !== "narrate").map((b) => ({ type: b.type, id: b.id, text: b.text })).slice(0, 14),
       });
       pushMsg(msgs, "assistant", compact);
