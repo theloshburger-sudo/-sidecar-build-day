@@ -188,3 +188,67 @@ test("beat badges never sit on top of writing", async () => {
     assert.ok(!overlap, `badge overlaps ${id}`);
   }
 });
+
+// Every piece of text on the board, as a rectangle (baseline y, so the glyphs sit above it).
+function textBoxes(prims: import("../lib/board").Prim[], acc: { x: number; y: number; w: number; h: number; t: string }[] = []) {
+  for (const p of prims) {
+    if (p.kind === "clear") acc.length = 0;
+    if (p.kind === "text" && p.text.trim()) acc.push({ x: p.x, y: p.y - p.size * 0.78, w: p.w, h: p.size * 0.95, t: p.text });
+  }
+  return acc;
+}
+function overlaps(boxes: ReturnType<typeof textBoxes>): string[] {
+  const out: string[] = [];
+  const pad = 2;
+  for (let i = 0; i < boxes.length; i++)
+    for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i], b = boxes[j];
+      if (a.x + pad < b.x + b.w - pad && b.x + pad < a.x + a.w - pad && a.y + pad < b.y + b.h - pad && b.y + pad < a.y + a.h - pad)
+        out.push(`"${a.t}" × "${b.t}"`);
+    }
+  return out;
+}
+
+test("no text overlaps in any demo lesson", () => {
+  for (const demo of DEMO_ASSIGNMENTS) {
+    let state = emptyBoard();
+    const boxes: ReturnType<typeof textBoxes> = [];
+    for (const turn of demo.lesson.script) {
+      const r = applyActions(state, [...(turn.board ?? [])]);
+      state = r.state;
+      textBoxes(r.prims, boxes);
+      assert.deepEqual(overlaps(boxes), [], demo.demoId);
+    }
+  }
+});
+
+test("no text overlaps with long titles, labels and cells", () => {
+  const long = "Classified = grouped into categories so readers can compare them";
+  const cases: import("../lib/types").BoardAction[][] = [
+    [{ type: "note", text: "Classified = grouped into categories", items: ["Assets: Current vs Long-term/Fixed", "Liabilities: Current vs Long-term"] }],
+    [{ type: "box", text: long, items: [long, "short"] }, { type: "write", text: long }],
+    [{ type: "note", zone: "right", text: long, items: [long] }, { type: "note", zone: "left", text: long, items: [long] }],
+    [{ type: "table", headers: ["Account", "Classification with a long explanation"], rows: [[long, long], ["Cash", "Current"]] } as never],
+    [{ type: "timeline", text: "Road to war", items: ["1914 June: Archduke Franz Ferdinand is shot", "July: Austria-Hungary declares war on Serbia", "Aug: Germany declares war on Russia and France", "Aug: Britain joins"] } as never],
+    [{ type: "flow", text: long, items: ["Nationalism grows across the Balkans", "Assassination in Sarajevo", "Alliances pull everyone in", "World war"] } as never],
+    [{ type: "mindmap", text: "Causes of WWI", items: ["Militarism and arms race", "Alliances", "Imperialism and colonies", "Nationalism", "Assassination"] } as never],
+    [{ type: "tAccount", text: "Prepaid Insurance", debits: ["Oct 1 paid 12,000"], credits: ["Dec 31 adjust 3,000"] } as never],
+    [{ type: "tAccount", text: "Accumulated Depreciation – Equipment", debits: ["1,000"], credits: ["Dec 31 adjust 3,000"] } as never],
+    [{ type: "write", id: "eq", text: "3x + 7 = 22", size: "lg" }, { type: "circle", target: "eq", match: "3x", text: "first layer of wrapping" }, { type: "circle", target: "eq", match: "+ 7", text: "second layer of wrapping" }, { type: "balance", target: "eq", text: "− 7" }],
+    [{ type: "write", text: "Current ratio = Current Assets ÷ Current Liabilities", size: "lg" }, { type: "note", text: long, items: ["a", "b"] }, { type: "write", text: long, size: "lg" }],
+    [{ type: "graph", id: "g", xMin: -5, xMax: 5, yMin: -5, yMax: 5, text: "Supply and demand" }, { type: "plot", target: "g", fn: "x + 1", text: "Supply curve" }, { type: "plot", target: "g", fn: "3 - x", text: "Demand curve" }, { type: "point", target: "g", x: 1, y: 2, text: "Equilibrium" }, { type: "point", target: "g", x: 1.2, y: 2.1, text: "Nearby point" }] as never,
+    [{ type: "numberLine", id: "nl", items: [], xMin: -4, xMax: 4, text: "Number line" }, { type: "interval", target: "nl", text: "I: (0, 3]" }, { type: "interval", target: "nl", text: "J: (−3, 2)" }, { type: "interval", target: "nl", text: "I ∩ J: (0, 2)" }] as never,
+    [{ type: "write", zone: "left", text: long }, { type: "write", zone: "right", text: long }, { type: "note", zone: "right", text: long, items: [long] }, { type: "write", zone: "full", text: long }] as never,
+  ];
+  for (const actions of cases) {
+    const r = applyActions(emptyBoard(), actions);
+    assert.deepEqual(overlaps(textBoxes(r.prims)), [], JSON.stringify(actions).slice(0, 80));
+  }
+});
+
+test("voice picker ids map only to known voices", async () => {
+  const { elevenVoiceId, NATURAL_VOICES, DEFAULT_VOICE } = await import("../lib/voices");
+  assert.equal(elevenVoiceId(DEFAULT_VOICE), "JBFqnCBsd6RMkjVDRZzb");
+  assert.equal(elevenVoiceId("../../v1/user"), null);
+  assert.equal(new Set(NATURAL_VOICES.map((v) => v.eleven)).size, NATURAL_VOICES.length);
+});

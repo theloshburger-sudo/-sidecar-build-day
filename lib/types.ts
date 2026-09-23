@@ -117,6 +117,8 @@ export interface Preferences {
   speed: number;
   /** Voice speed multiplier (0.75–1.5). */
   voiceSpeed: number;
+  /** Who Teacher sounds like: a natural voice id (see lib/voices) or "browser:<name>". */
+  voiceName?: string;
 }
 
 export interface Problem {

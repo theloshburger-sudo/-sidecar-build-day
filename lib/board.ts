@@ -434,17 +434,25 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
       [p[0] - w / 2, p[1] - 36],
       [p[0] + 10, p[1] + 52],
       [p[0] - w / 2, p[1] + 52],
+      [p[0] + 30, p[1] - 62],
+      [p[0] + 30, p[1] + 78],
+      [p[0] - w - 30, p[1] - 62],
+      [p[0] - w - 30, p[1] + 78],
     ];
-    const hits = (b: Box) => s.labels.some((o) => b.x < o.x + o.w && b.x + b.w > o.x && b.y < o.y + o.h && b.y + b.h > o.y);
+    const overlap = (b: Box) =>
+      s.labels.reduce((acc, o) => acc + Math.max(0, Math.min(b.x + b.w, o.x + o.w) - Math.max(b.x, o.x)) * Math.max(0, Math.min(b.y + b.h, o.y + o.h) - Math.max(b.y, o.y)), 0);
+    // First free spot wins; if every spot is crowded, take the least-covered one.
     let best: Box | null = null;
+    let bestCost = Infinity;
     for (const [x0, y0] of spots) {
       const x = Math.max(bounds.x, Math.min(x0, bounds.x + bounds.w - w));
       const b = { x, y: y0 - size * 0.85, w, h };
-      if (!hits(b)) {
+      const cost = overlap(b);
+      if (cost < bestCost) {
         best = b;
-        break;
+        bestCost = cost;
       }
-      best ??= b;
+      if (cost === 0) break;
     }
     s.labels.push(best!);
     addText(label, best!.x, best!.y + size * 0.85, size, color, bold, true);
@@ -461,6 +469,7 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
       const x = Math.max(s.annot[hit.key] ?? 0, lineEnd + 26, hit.box.x + hit.box.w + 18);
       if (x + w <= right) {
         addText(label, x, hit.line.y, size, color, false, true);
+        s.labels.push({ x, y: hit.line.y - size * 0.85, w, h: size * 1.1 });
         s.annot[hit.key] = x + w + 18;
         return;
       }
@@ -471,8 +480,12 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
     }
     // No room beside the line: tuck it under the mark and make room below.
     const x = Math.min(Math.max(hit.box.x, 20), right - w);
-    const y = hit.box.y + hit.box.h + size + 6;
+    let y = hit.box.y + hit.box.h + size + 6;
+    // Two marks on one line can both tuck underneath: stack instead of writing over each other.
+    const clash = (yy: number) => s.labels.some((o) => x < o.x + o.w && x + w > o.x && yy - size * 0.85 < o.y + o.h && yy + size * 0.25 > o.y);
+    for (let tries = 0; tries < 4 && clash(y); tries++) y += size * 1.2;
     addText(label, x, y, size, color, false, true);
+    s.labels.push({ x, y: y - size * 0.85, w, h: size * 1.1 });
     const bottom = y + size * 0.4;
     if (topOf(zone) < bottom + GAP) advance(zone, bottom);
   };
@@ -629,14 +642,22 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
         const line = el.lines.find((l) => l.text.includes("=")) ?? el.lines[el.lines.length - 1];
         const eq = line.text.indexOf("=");
         const color = colorOf(a.color, "orange");
-        const y = el.box.y + el.box.h + line.size * 0.72;
+        let y = el.box.y + el.box.h + line.size * 0.72;
         const sw = measure(text, line.size);
         if (eq >= 0) {
           const leftC = line.x + measure(line.text.slice(0, eq), line.size) / 2;
           const afterEq = line.x + measure(line.text.slice(0, eq + 1), line.size);
           const rightC = (afterEq + line.x + measure(line.text, line.size)) / 2;
+          // Step below any mark labels (e.g. "2nd: + 7") already hanging under the equation.
+          const opBox = (cx: number): Box => ({ x: cx - sw / 2, y: y - line.size * 0.8, w: sw, h: line.size });
+          for (let tries = 0; tries < 6; tries++) {
+            const hit = s.labels.filter((o) => [opBox(leftC), opBox(rightC)].some((b) => b.x < o.x + o.w && b.x + b.w > o.x && b.y < o.y + o.h && b.y + b.h > o.y));
+            if (!hit.length) break;
+            y = Math.max(...hit.map((o) => o.y + o.h)) + line.size * 0.8 + 4;
+          }
           addText(text, leftC - sw / 2, y, line.size, color);
           addText(text, rightC - sw / 2, y, line.size, color);
+          s.labels.push(opBox(leftC), opBox(rightC));
         } else {
           addText(text, line.x + measure(line.text, line.size) + 16, line.y, line.size, color);
         }
@@ -802,7 +823,9 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
         const color = colorOf(a.color, isNote ? "ink" : "blue");
         // Measure first so the frame can be drawn before the writing.
         const lineH = Math.round(FONT.sm * 1.42);
-        const titleH = text ? Math.round(FONT.md * 1.4) : 0;
+        // A long title wraps, so reserve room for every line or the bullets write over it.
+        const titleLines = text ? wrap(text, w - pad * 2, FONT.md, measure).length : 0;
+        const titleH = titleLines * Math.round(FONT.md * 1.42);
         const items = list(a.items).slice(0, 12).map((i) => String(i));
         const itemLines = items.map((it) => wrap(`• ${it}`, w - pad * 2, FONT.sm, measure).length);
         const h = pad + titleH + itemLines.reduce((acc, n) => acc + n * lineH, 0) + pad * 0.6;
@@ -876,12 +899,14 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
           const p = toPx(g, v, ay);
           const label = fmt(v);
           prims.push({ kind: "text", key: key(), x: p[0] - measure(label, tick) / 2, y: p[1] + 18, text: label, size: tick, color: INK.muted, w: measure(label, tick), dur: 60 });
+          s.labels.push({ x: p[0] - measure(label, tick) / 2, y: p[1] + 18 - tick, w: measure(label, tick), h: tick * 1.1 });
         }
         for (let v = Math.ceil(yMin / gy) * gy; v <= yMax + 1e-9; v += gy) {
           if (Math.abs(v - ay) < 1e-9 && ay !== yMin) continue;
           const p = toPx(g, ax, v);
           const label = fmt(v);
           prims.push({ kind: "text", key: key(), x: p[0] - measure(label, tick) - 7, y: p[1] + 5, text: label, size: tick, color: INK.muted, w: measure(label, tick), dur: 60 });
+          s.labels.push({ x: p[0] - measure(label, tick) - 7, y: p[1] + 5 - tick, w: measure(label, tick), h: tick * 1.1 });
         }
         if (a.xLabel) {
           const xl = String(a.xLabel).slice(0, 40);
@@ -974,28 +999,39 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
         const colW = z.w / cols;
         const rowH = 38;
         const top = topOf(zone) + 6;
-        const nRows = rows.length + (headers.length ? 1 : 0);
-        const h = nRows * rowH;
+        const all = headers.length ? [headers, ...rows] : rows;
+        // Shrink a little, then wrap: long cells get taller rows instead of running into the next column.
+        const laid = all.map((row) =>
+          row.map((cell) => {
+            let size = FONT.sm;
+            while (size > 16 && measure(cell, size) > colW - 16) size -= 1;
+            return { cell, size, lines: wrap(cell, colW - 16, size, measure) };
+          }),
+        );
+        const heights = laid.map((row) => Math.max(rowH, ...row.map((c) => (c.lines.length - 1) * Math.round(c.size * 1.3) + rowH)));
+        const tops: number[] = [top];
+        for (const rh of heights) tops.push(tops[tops.length - 1] + rh);
+        const h = tops[tops.length - 1] - top;
         const grid: Pt[][] = [];
-        for (let r = 0; r <= nRows; r++) grid.push(handLine([z.x, top + r * rowH], [z.x + z.w, top + r * rowH], rand, 0.5));
+        for (const y of tops) grid.push(handLine([z.x, y], [z.x + z.w, y], rand, 0.5));
         for (let c = 0; c <= cols; c++) grid.push(handLine([z.x + c * colW, top], [z.x + c * colW, top + h], rand, 0.5));
         addPath(grid, INK.muted, 1.8);
         const tableId = (a.id || "").trim() || `tb${s.seq + 1}`;
         const children: string[] = [];
-        const all = headers.length ? [headers, ...rows] : rows;
-        all.forEach((row, r) => {
-          row.forEach((cell, c) => {
-            let size = FONT.sm;
-            while (size > 13 && measure(cell, size) > colW - 14) size -= 1;
+        laid.forEach((row, r) => {
+          row.forEach(({ cell, size, lines }, c) => {
             const x = z.x + c * colW + 8;
-            const y = top + r * rowH + rowH * 0.68;
             const color = headers.length && r === 0 ? INK.blue : INK.ink;
-            const w = addText(cell, x, y, size, color, headers.length > 0 && r === 0);
+            const lh = Math.round(size * 1.3);
+            const placed: Line[] = lines.map((l, i) => ({ text: l.text, start: l.start, x, y: tops[r] + rowH * 0.68 + i * lh, size }));
+            let w = 0;
+            for (const l of placed) w = Math.max(w, addText(l.text, l.x, l.y, size, color, headers.length > 0 && r === 0));
+            const y0 = placed[0].y;
             const cid = register(`${tableId}.${r}.${c}`, {
               kind: "text",
               text: cell,
-              lines: [{ text: cell, x, y, size, start: 0 }],
-              box: { x, y: y - size, w, h: size * 1.2 },
+              lines: placed,
+              box: { x, y: y0 - size, w, h: size * 1.2 + (placed.length - 1) * lh },
               label: cell,
             }, "t");
             children.push(cid);
@@ -1026,12 +1062,17 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
         }
         const color = colorOf(a.color, "ink");
         const title = text || "Account";
-        const tw = measure(title, FONT.md);
-        addText(title, x + (w - tw) / 2, top + FONT.md, FONT.md, color, true);
+        // Keep the title between the small "Dr" and "Cr" corner labels.
+        let ts = FONT.md;
+        while (ts > 18 && measure(title, ts) > w - 60) ts -= 1;
+        const tw = measure(title, ts);
+        addText(title, x + (w - tw) / 2, top + FONT.md, ts, color, true);
         const barY = top + 44;
         addPath([handLine([x, barY], [x + w, barY], rand), handLine([x + w / 2, barY], [x + w / 2, top + h], rand)], color, 3);
-        prims.push({ kind: "text", key: key(), x: x + 4, y: barY - 6, text: "Dr", size: 14, color: INK.muted, w: 16, dur: 60 });
-        prims.push({ kind: "text", key: key(), x: x + w - 20, y: barY - 6, text: "Cr", size: 14, color: INK.muted, w: 16, dur: 60 });
+        if (tw <= w - 50) {
+          prims.push({ kind: "text", key: key(), x: x + 4, y: barY - 6, text: "Dr", size: 14, color: INK.muted, w: 16, dur: 60 });
+          prims.push({ kind: "text", key: key(), x: x + w - 20, y: barY - 6, text: "Cr", size: 14, color: INK.muted, w: 16, dur: 60 });
+        }
         const acctId = (a.id || "").trim() || `acct${s.seq + 1}`;
         const children: string[] = [];
         const put = (items: string[], side: 0 | 1) =>

@@ -11,7 +11,8 @@ import type { AppStatus, Engine } from "./SidecarApp";
 import { applyActions, badgeSpot, boardHeight, describeBoard, emptyBoard, primsBox, BOARD_MIN_H, type BoardState, type Measure } from "@/lib/board";
 import { getDemo } from "@/lib/demo";
 import { demoReply, demoStart, type DemoState } from "@/lib/demo-engine";
-import { createRecognizer, isEcho, prefetchVoice, speakAsync, speechRecognitionSupported, stopSpeaking, ttsSupported } from "@/lib/speech";
+import { browserVoices, createRecognizer, isEcho, prefetchVoice, setVoiceChoice, speak, speakAsync, speechRecognitionSupported, stopSpeaking, ttsSupported } from "@/lib/speech";
+import { DEFAULT_VOICE, NATURAL_VOICES } from "@/lib/voices";
 import { BeatBuilder, beatsFromTurn, type Beat } from "@/lib/narration";
 import { BoardStreamParser, STREAM_ERROR } from "@/lib/stream-parse";
 import { normalizeTurn } from "@/lib/sanitize";
@@ -130,6 +131,24 @@ export default function Session({
   /** The beat player for the turn currently being taught (see playTurn). */
   const player = useRef<{ push(a: BoardAction): void; end(turn: TutorTurn): void; flush(): void } | null>(null);
   statusRef.current = status;
+  const [browserList, setBrowserList] = useState<string[]>([]);
+  const naturalOn = Boolean(status?.voice);
+  const saved = prefs.voiceName || "";
+  const voiceName = saved && (naturalOn || saved.startsWith("browser:")) ? saved : naturalOn ? DEFAULT_VOICE : "";
+  setVoiceChoice(voiceName);
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const load = () => setBrowserList(browserVoices());
+    load();
+    window.speechSynthesis.addEventListener("voiceschanged", load);
+    return () => window.speechSynthesis.removeEventListener("voiceschanged", load);
+  }, []);
+  const pickVoice = (v: string) => {
+    setPrefs({ voiceName: v });
+    setVoiceChoice(v);
+    // Let the student hear who they picked (only between lines, never over Teacher mid-sentence).
+    if (!busyRef.current) speak("Hi! This is how I'll sound.", { natural: naturalOn, rate: prefs.voiceSpeed || 1 });
+  };
 
   const lastTutor = useMemo(() => {
     for (let i = history.length - 1; i >= 0; i--) {
@@ -815,6 +834,27 @@ export default function Session({
                     </button>
                   ))}
                 </div>
+              )}
+              {prefs.voice && (naturalOn || browserList.length > 0) && (
+                <label className="voice-pick" title="Who Teacher sounds like">
+                  <span aria-hidden>🗣️</span>
+                  <select aria-label="Teacher's voice" value={voiceName || (browserList[0] ? `browser:${browserList[0]}` : "")} onChange={(e) => pickVoice(e.target.value)}>
+                    {naturalOn && (
+                      <optgroup label="Natural voices">
+                        {NATURAL_VOICES.map((v) => (
+                          <option key={v.id} value={v.id}>{v.label}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {browserList.length > 0 && (
+                      <optgroup label="This device's voices">
+                        {browserList.map((n) => (
+                          <option key={n} value={`browser:${n}`}>{n}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
+                </label>
               )}
             </div>
             <Whiteboard

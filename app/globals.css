@@ -1450,8 +1450,11 @@ h3 {
 .speed button { border: 0; background: none; border-radius: 999px; padding: 3px 9px; font-weight: 700; font-size: 12.5px; color: var(--muted); }
 .speed button:hover { color: var(--primary); }
 .speed button.is-on { background: var(--primary-soft); color: var(--primary); box-shadow: 0 0 10px rgba(79, 195, 255, 0.35); }
+.voice-pick { display: inline-flex; align-items: center; gap: 2px; padding: 3px 4px 3px 8px; border: 1px solid var(--line); border-radius: 999px; background: #fff; font-size: 13px; min-width: 0; }
+.voice-pick select { border: 0; background: none; font: inherit; font-weight: 700; font-size: 12.5px; color: var(--primary); width: 112px; min-width: 0; text-overflow: ellipsis; cursor: pointer; }
+.voice-pick select:focus-visible { outline: 2px solid var(--primary); border-radius: 6px; }
 
-.board-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 8px 10px; }
+.board-tools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 0 8px 10px; }
 .tools-spacer { flex: 1; }
 .tool { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 5px 12px; font-size: 13px; font-weight: 700; }
 .tool:hover { background: var(--soft); }
