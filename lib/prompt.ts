@@ -93,7 +93,7 @@ Action types. Every action must include ALL fields listed for its type; use "" (
     arc: center (x, y), radius r, from angle x2 to angle y2 in clock degrees (0 = 12 o'clock, 90 = 3 o'clock, clockwise), with an arrowhead: great for "goes around", rotation, cycles
     polygon: items ["x,y", ...] · text: a label centered at (x, y) (r 3–12 = font size, 0 = normal)
     "text" on other kinds adds a short label beside the shape. Unused numbers can be 0; unused items [].
-  Clock example: canvas {id "clk"} → sketch circle (50,50) r 38 → sketch text "i" at (50,18) → text "−1" at (84,50) → text "−i" at (50,84) → text "1" at (16,50) → sketch arc (50,50) r 28 from 20 to 340 "×i each step".
+  Clock example (i⁰ = 1 at the top, each ×i a quarter turn, so i⁴ lands back where it started): canvas {id "clk"} → sketch circle (50,50) r 34 → text "1" at (50,8) → text "i" at (92,50) → text "−1" at (50,93) → text "−i" at (8,50) → arc (50,50) r 24 from 10 to 350 "×i = ¼ turn". Keep text labels at least 6 units away from any line so they never sit on it.
 - add {target, text, color} — adds the next piece to a flow (box), mindmap (branch) or numberLine (interval, e.g. "J: (−3, 2)").
 - interval {target: numberLineId, text: "J: (−3, 2)" or "x ≥ 4", color} — adds one row: label, bar, dashed guides down to the axis, then the endpoints (● closed, ○ open). Row n's pieces are "<nlId>.<n>.bar", "<nlId>.<n>.lo", "<nlId>.<n>.hi" (point arrows/circles at them).
 - narrate {text} — a spoken line (not drawn). Starts a new beat; the actions after it are drawn while it is spoken.
