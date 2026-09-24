@@ -252,3 +252,42 @@ test("voice picker ids map only to known voices", async () => {
   assert.equal(elevenVoiceId("../../v1/user"), null);
   assert.equal(new Set(NATURAL_VOICES.map((v) => v.eleven)).size, NATURAL_VOICES.length);
 });
+
+test("pointTo flies to a substring, a table cell or a graph spot, and draws nothing permanent", () => {
+  const r = applyActions(emptyBoard(), [
+    { type: "write", id: "eq1", text: "3x + 7 = 22", size: "lg" },
+    { type: "table", id: "je", headers: ["Account", "Debit"], rows: [["Expense", "3,000"]] },
+    { type: "graph", id: "g1", zone: "right", xMin: 0, xMax: 20, yMin: 0, yMax: 12 },
+    { type: "pointTo", target: "eq1", match: "22", text: "still needs − 7" },
+    { type: "pointTo", target: "je.1.1", match: "", text: "debit" },
+    { type: "pointTo", target: "g1", match: "8,6", text: "they agree" },
+    { type: "pointTo", target: "missing", match: "zzz", text: "nope" },
+  ] as never);
+  const pts = r.prims.filter((p) => p.kind === "point") as Extract<import("../lib/board").Prim, { kind: "point" }>[];
+  assert.equal(pts.length, 3);
+  const eq = r.state.els.eq1 as { box: { x: number; w: number } };
+  assert.ok(pts[0].x > eq.box.x + eq.box.w * 0.6, "points at the 22, not the start of the line");
+  assert.equal(pts[1].label, "debit");
+  const g = r.state.els.g1 as { plot: { x: number; y: number; w: number; h: number } };
+  assert.ok(Math.abs(pts[2].x + 9 - (g.plot.x + g.plot.w * 0.4)) < 1 && Math.abs(pts[2].y + 9 - (g.plot.y + g.plot.h * 0.5)) < 1);
+  const { primsBox } = require("../lib/board");
+  assert.equal(primsBox(pts), null, "pointing never gets a badge or counts as drawing");
+});
+
+test("the pointer's label bubble never covers writing", () => {
+  const cases: import("../lib/types").BoardAction[][] = [
+    [{ type: "write", id: "eq1", text: "3x + 7 = 22", size: "lg" }, { type: "balance", target: "eq1", text: "− 7" }, { type: "pointTo", target: "eq1", match: "22", text: "still needs − 7" }],
+    [{ type: "write", id: "a", text: "Current ratio = Current Assets ÷ Current Liabilities" }, { type: "write", text: "Quick ratio = (Cash + Receivables) ÷ Current Liabilities" }, { type: "pointTo", target: "a", match: "Current Assets", text: "what you own soon" }],
+    [{ type: "table", id: "je", zone: "full", headers: ["Date", "Account", "Debit", "Credit"], rows: [["Dec 31", "Insurance Expense", "3,000", ""], ["", "Prepaid Insurance", "", "3,000"]] }, { type: "pointTo", target: "je.1.2", match: "", text: "debit: expense ↑" }, { type: "pointTo", target: "je.2.3", match: "", text: "credit: asset ↓" }],
+  ] as never;
+  for (const actions of cases) {
+    const r = applyActions(emptyBoard(), actions);
+    const texts = textBoxes(r.prims);
+    for (const p of r.prims) {
+      if (p.kind !== "point" || !p.spot) continue;
+      const b = { x: p.spot.bx, y: p.spot.by, w: p.spot.bw, h: p.spot.bh };
+      const hit = texts.filter((t) => b.x < t.x + t.w - 2 && b.x + b.w > t.x + 2 && b.y < t.y + t.h - 2 && b.y + b.h > t.y + 2);
+      assert.deepEqual(hit.map((t) => t.t), [], `bubble "${p.label}"`);
+    }
+  }
+});

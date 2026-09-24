@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { BOARD_W, pointAt, toD, type Prim, type Pt } from "@/lib/board";
+import { BOARD_W, POINTER_FONT, pointAt, pointerBubbleW, toD, type PointerSpot, type Prim, type Pt } from "@/lib/board";
 import { segments } from "@/lib/mathtext";
 
 export interface WhiteboardHandle {
@@ -43,7 +43,14 @@ function segLengths(paths: Pt[][]): number[] {
   });
 }
 
+/** Where the pointer's tip lands for a box: just under small targets, in the middle of big ones. */
+export function pointerTip(b: { x: number; y: number; w: number; h: number }): Pt {
+  if (b.h > 90) return [b.x + b.w * 0.5, b.y + b.h * 0.5];
+  return [b.x + Math.min(b.w * 0.55, b.w - 4), b.y + b.h + 5];
+}
+
 function startOf(p: Prim): Pt {
+  if (p.kind === "point") return p.spot?.tip ?? pointerTip(p);
   if (p.kind === "text") return [p.x, p.y - p.size * 0.35];
   if (p.kind === "path") return p.paths[0]?.[0] ?? [0, 0];
   if (p.kind === "fill") return [p.x, p.y + p.h / 2];
@@ -51,6 +58,7 @@ function startOf(p: Prim): Pt {
 }
 
 function tipOf(p: Prim, t: number): Pt {
+  if (p.kind === "point") return p.spot?.tip ?? pointerTip(p);
   if (p.kind === "text") return [p.x + p.w * t, p.y - p.size * 0.35 + Math.sin(t * 38) * p.size * 0.14];
   if (p.kind === "path") return pointAt(p.paths, t);
   if (p.kind === "fill") return [p.x + p.w * t, p.y + p.h / 2];
@@ -178,6 +186,68 @@ function BeatTags({ tags, focus }: { tags: NonNullable<Props["tags"]>; focus: nu
   );
 }
 
+interface PointerState {
+  key: string;
+  beat?: number;
+  tip: Pt;
+  /** Degrees: faces the direction of travel in flight, tilts to -35° when resting (like a mouse cursor). */
+  rot: number;
+  scale: number;
+  flying: boolean;
+  box: { x: number; y: number; w: number; h: number };
+  label: string;
+  typed: number;
+  spot?: PointerSpot;
+}
+
+/**
+ * Teacher's pointer: a glowing cursor that flies to what's being talked about, rings it,
+ * and pops a short label ("the outer layer") that types itself out.
+ */
+function Pointer({ p }: { p: PointerState }) {
+  const shown = p.label.slice(0, p.typed);
+  const size = POINTER_FONT;
+  const bh = size + 14;
+  const bw = pointerBubbleW(shown);
+  const fullW = pointerBubbleW(p.label);
+  const left = p.spot ? p.spot.bx + p.spot.bw / 2 < p.tip[0] : false;
+  // Grows as it types, anchored on the side nearest the cursor.
+  const bx = p.spot ? (left ? p.spot.bx + fullW - bw : p.spot.bx) : Math.min(p.tip[0] + 16, BOARD_W - 8 - bw);
+  const by = p.spot ? p.spot.by : p.tip[1] + 14;
+  const right = !left;
+  const pad = 7;
+  return (
+    <g className="wb-pointer" aria-hidden>
+      {!p.flying && (
+        <rect
+          key={`ring-${p.key}`}
+          className="wb-pointer-ring"
+          x={p.box.x - pad}
+          y={p.box.y - pad}
+          width={p.box.w + pad * 2}
+          height={p.box.h + pad * 2}
+          rx={10}
+        />
+      )}
+      <g transform={`translate(${p.tip[0]} ${p.tip[1]}) rotate(${p.rot}) scale(${p.scale})`}>
+        <path
+          d="M0 0 L9.5 23 L0 18.5 L-9.5 23 Z"
+          className="wb-pointer-tri"
+          style={{ filter: `drop-shadow(0 0 ${6 + (p.scale - 1) * 30}px rgba(79,195,255,0.95))` }}
+        />
+      </g>
+      {!p.flying && shown && (
+        <g key={`bubble-${p.key}`} className={`wb-pointer-bubble ${right ? "" : "wb-pointer-bubble--left"}`}>
+          <rect x={bx} y={by} width={bw} height={bh} rx={bh / 2} />
+          <text x={bx + 11} y={by + bh / 2 + size * 0.36} fontSize={size}>
+            {shown}
+          </text>
+        </g>
+      )}
+    </g>
+  );
+}
+
 /** Teacher's glowing stylus, with a mini Teacher riding along. */
 function Marker({ tip, erasing }: { tip: Pt; erasing: boolean }) {
   return (
@@ -211,8 +281,9 @@ function Marker({ tip, erasing }: { tip: Pt; erasing: boolean }) {
 const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ height, speed, onBusyChange, empty, penMode = false, onInkChange, focusBeat = null, tags = [] }, ref) {
   const [done, setDone] = useState<Prim[]>([]);
   const [active, setActive] = useState<{ prim: Prim; t: number; tip: Pt } | null>(null);
+  const [pointer, setPointer] = useState<PointerState | null>(null);
   const queue = useRef<Prim[]>([]);
-  const cur = useRef<{ prim: Prim; start: number; from: Pt } | null>(null);
+  const cur = useRef<{ prim: Prim; start: number; from: Pt; flight?: number } | null>(null);
   const lastTip = useRef<Pt>([BOARD_W - 120, 80]);
   const raf = useRef(0);
   const speedRef = useRef(speed);
@@ -294,10 +365,52 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
         raf.current = 0;
         return;
       }
-      cur.current = { prim: next, start: now + TRAVEL_MS / (syncRef.current ?? speedRef.current), from: lastTip.current };
+      const spd0 = syncRef.current ?? speedRef.current;
+      if (next.kind === "point") {
+        // Flight time grows with distance (short hops are quick), and never drags even when speech is slow.
+        const to = startOf(next);
+        const dist = Math.hypot(to[0] - lastTip.current[0], to[1] - lastTip.current[1]);
+        const flight = Math.min(900, Math.max(420, dist * 0.9)) / Math.max(1, spd0);
+        cur.current = { prim: next, start: now + flight, from: lastTip.current, flight };
+      } else {
+        // The stylus takes over: the pointer steps aside while Teacher draws.
+        setPointer(null);
+        cur.current = { prim: next, start: now + TRAVEL_MS / spd0, from: lastTip.current };
+      }
     }
-    const { prim, start, from } = cur.current;
+    const { prim, start, from, flight } = cur.current;
     const spd = syncRef.current ?? speedRef.current;
+
+    if (prim.kind === "point") {
+      const to = startOf(prim);
+      const box = { x: prim.x, y: prim.y, w: prim.w, h: prim.h };
+      if (now < start) {
+        // Quadratic bezier arc with smoothstep easing; the cursor faces its direction of travel
+        // and swells a little at the apex, then settles on landing.
+        const lin = 1 - (start - now) / (flight || 1);
+        const t = lin * lin * (3 - 2 * lin);
+        const dist = Math.hypot(to[0] - from[0], to[1] - from[1]);
+        const c: Pt = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2 - Math.min(dist * 0.2, 80)];
+        const u = 1 - t;
+        const tip: Pt = [u * u * from[0] + 2 * u * t * c[0] + t * t * to[0], u * u * from[1] + 2 * u * t * c[1] + t * t * to[1]];
+        const dx = 2 * u * (c[0] - from[0]) + 2 * t * (to[0] - c[0]);
+        const dy = 2 * u * (c[1] - from[1]) + 2 * t * (to[1] - c[1]);
+        const rot = dist < 2 ? -35 : (Math.atan2(dy, dx) * 180) / Math.PI + 90;
+        setActive(null);
+        setPointer({ key: prim.key, beat: prim.beat, tip, rot, scale: 1 + Math.sin(lin * Math.PI) * 0.3, flying: true, box, label: prim.label, typed: 0 });
+        follow(tip);
+      } else {
+        const typed = Math.min(prim.label.length, Math.floor((now - start) / 38));
+        setPointer({ key: prim.key, beat: prim.beat, tip: to, rot: prim.spot?.rot ?? -35, scale: 1, flying: false, box, label: prim.label, typed, spot: prim.spot });
+        if (now - start >= prim.dur / spd && typed >= prim.label.length) {
+          lastTip.current = to;
+          cur.current = null;
+        }
+      }
+      raf.current = requestAnimationFrame(tick);
+      return;
+    }
+
     if (now < start) {
       // Marker travels to where the next stroke begins.
       const k = 1 - (start - now) / (TRAVEL_MS / spd);
@@ -344,9 +457,10 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
       queue.current = [];
       cur.current = null;
       setActive(null);
+      setPointer(null);
       setDone((prev) => {
         let out = [...prev];
-        for (const p of pending) out = p.kind === "clear" ? [] : [...out, p];
+        for (const p of pending) out = p.kind === "clear" ? [] : p.kind === "point" ? out : [...out, p];
         return out;
       });
       setBusy(false);
@@ -363,7 +477,7 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
       const svg = svgRef.current;
       if (!svg) return null;
       const clone = svg.cloneNode(true) as SVGSVGElement;
-      clone.querySelectorAll(".wb-marker").forEach((n) => n.remove());
+      clone.querySelectorAll(".wb-marker, .wb-pointer").forEach((n) => n.remove());
       clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
       clone.setAttribute("width", String(BOARD_W));
       clone.setAttribute("height", String(height));
@@ -404,6 +518,7 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
       queue.current = [];
       cur.current = null;
       setActive(null);
+      setPointer(null);
       setDone([]);
       setBusy(false);
     },
@@ -442,7 +557,8 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
             ),
           )}
         </g>
-        {active && <Marker tip={active.tip} erasing={active.prim.kind === "clear"} />}
+        {pointer && (pointer.flying || focusBeat == null || pointer.beat === focusBeat) && <Pointer p={pointer} />}
+        {active && active.prim.kind !== "point" && <Marker tip={active.tip} erasing={active.prim.kind === "clear"} />}
       </svg>
       {isEmpty && !ink.length && empty && <div className="wb-empty">{empty}</div>}
     </div>

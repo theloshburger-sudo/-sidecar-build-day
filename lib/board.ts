@@ -42,7 +42,79 @@ export type Prim =
   | { kind: "path"; beat?: number; key: string; paths: Pt[][]; color: string; width: number; dashed?: boolean; fill?: string; dur: number }
   | { kind: "text"; beat?: number; key: string; x: number; y: number; text: string; size: number; color: string; w: number; bold?: boolean; halo?: boolean; dur: number }
   | { kind: "fill"; beat?: number; key: string; x: number; y: number; w: number; h: number; color: string; opacity: number; dur: number }
-  | { kind: "clear"; key: string; dur: number };
+  | { kind: "clear"; key: string; dur: number }
+  /** Teacher's pointer flies to a box on the board and shows a short label while the line is spoken. */
+  | { kind: "point"; beat?: number; key: string; x: number; y: number; w: number; h: number; label: string; dur: number; spot?: PointerSpot };
+
+/** Where the pointer rests (tip + resting angle) and where its label bubble goes, clear of any writing. */
+export interface PointerSpot {
+  tip: Pt;
+  rot: number;
+  bx: number;
+  by: number;
+  bw: number;
+  bh: number;
+}
+
+export const POINTER_FONT = 15;
+export function pointerBubbleW(label: string): number {
+  return label.length * POINTER_FONT * 0.56 + 22;
+}
+
+export function pointerSpot(state: BoardState, b: Box, label: string): PointerSpot {
+  const bw = label ? pointerBubbleW(label) : 0;
+  const bh = label ? POINTER_FONT + 14 : 0;
+  const blockers: Box[] = [...(state.labels ?? [])];
+  for (const id of state.order) {
+    const el = state.els[id];
+    if (!el) continue;
+    if (el.kind === "text" || (el.kind === "block" && el.box.w * el.box.h < 60000)) blockers.push(el.box);
+  }
+  const isSelf = (o: Box) => o.x <= b.x + 1 && o.y <= b.y + 1 && o.x + o.w >= b.x + b.w - 1 && o.y + o.h >= b.y + b.h - 1;
+  /** How much of a rectangle is covered by writing (0 = free), with off-board counting as covered. */
+  const cost = (r: Box) => {
+    let c = r.x < 6 || r.y < 2 || r.x + r.w > BOARD_W - 6 ? 1e6 : 0;
+    for (const o of blockers) {
+      if (isSelf(o)) continue; // the thing being pointed at may be touched
+      c += Math.max(0, Math.min(r.x + r.w, o.x + o.w + 3) - Math.max(r.x, o.x - 3)) * Math.max(0, Math.min(r.y + r.h, o.y + o.h + 3) - Math.max(r.y, o.y - 3));
+    }
+    return c;
+  };
+  const big = b.h > 90;
+  const cx = big ? b.x + b.w / 2 : b.x + Math.min(b.w * 0.55, b.w - 4);
+  const below: Pt = big ? [cx, b.y + b.h / 2] : [cx, b.y + b.h + 5];
+  const above: Pt = [cx, b.y - 5];
+  const right: Pt = [b.x + b.w + 6, b.y + b.h / 2];
+  const cands: PointerSpot[] = [];
+  // Near the cursor first, then sliding along / down until the label lands on empty board.
+  for (const dx of [0, 24, 48, 80, 120, 170]) {
+    for (const dy of [0, 30, 60]) {
+      cands.push({ tip: below, rot: -35, bx: below[0] + 16 + dx, by: below[1] + 14 + dy, bw, bh });
+      cands.push({ tip: below, rot: 35, bx: below[0] - 16 - bw - dx, by: below[1] + 14 + dy, bw, bh });
+    }
+    cands.push({ tip: right, rot: -90, bx: right[0] + 28 + dx, by: right[1] - bh / 2, bw, bh });
+    cands.push({ tip: above, rot: 215, bx: above[0] + 16 + dx, by: above[1] - 14 - bh, bw, bh });
+    cands.push({ tip: above, rot: 145, bx: above[0] - 16 - bw - dx, by: above[1] - 14 - bh, bw, bh });
+  }
+  // the cursor body sits on the far side of its tip; keep that clear too
+  const body = (c: PointerSpot): Box => {
+    const a = (c.rot * Math.PI) / 180;
+    const mx = c.tip[0] - Math.sin(a) * 14;
+    const my = c.tip[1] + Math.cos(a) * 14;
+    return { x: mx - 8, y: my - 8, w: 16, h: 16 };
+  };
+  let best = cands[0];
+  let bestCost = Infinity;
+  for (const c of cands) {
+    const k = cost(body(c)) * 0.5 + (label ? cost({ x: c.bx, y: c.by, w: c.bw, h: c.bh }) : 0);
+    if (k < bestCost) {
+      best = c;
+      bestCost = k;
+      if (k === 0) break;
+    }
+  }
+  return best;
+}
 
 /**
  * Where to put a small numbered badge for something drawn at `bb` without covering any writing:
@@ -664,6 +736,23 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
         const zoneKey = zoneOfBox(el.box);
         const bottom = y + line.size * 0.45;
         if (topOf(zoneKey) < bottom + GAP) advance(zoneKey, bottom);
+        break;
+      }
+
+      case "pointTo": {
+        // Nothing is drawn: the pointer flies to what the words are about, like a teacher tapping the board.
+        const g = a.target ? s.els[a.target] : undefined;
+        const xy = /^\s*\(?\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\)?\s*$/.exec(a.match || "");
+        let hit: { box: Box } | null = null;
+        if (g && g.kind === "graph" && xy) {
+          // A spot on a graph, in graph coordinates ("8,6" = where the curves cross).
+          const [px, py] = toPx(g, Number(xy[1]), Number(xy[2]));
+          if (Number.isFinite(px) && Number.isFinite(py)) hit = { box: { x: px - 9, y: py - 9, w: 18, h: 18 } };
+        } else hit = locate(a.target, a.match);
+        if (!hit) break;
+        const label = (text || "").slice(0, 28);
+        const spot = pointerSpot(s, hit.box, label);
+        prims.push({ kind: "point", key: key(), x: hit.box.x, y: hit.box.y, w: hit.box.w, h: hit.box.h, label, dur: 900, spot });
         break;
       }
 
