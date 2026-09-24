@@ -192,14 +192,18 @@ export default function Session({
         rate: p.voiceSpeed || 1,
         natural: Boolean(statusRef.current?.voice),
         onStart: (ms) => {
-          if (!alive()) return;
+          // Once per line: a second start (voice fallback) must never draw the beat twice.
+          if (!alive() || drawn) return;
           drawn = true;
           setSpeaking(true);
           wb.current?.enqueue(res.prims, auto ? ms * 0.9 : undefined);
         },
       });
       await speech;
-      if (!drawn) wb.current?.enqueue(res.prims);
+      if (!drawn) {
+        drawn = true;
+        wb.current?.enqueue(res.prims);
+      }
       setSpeaking(false);
       await wb.current?.whenIdle();
     } else {
@@ -375,6 +379,7 @@ export default function Session({
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         const parser = new BoardStreamParser();
+        const streamed: BoardAction[] = [];
         for (;;) {
           const { value, done } = await reader.read();
           if (done) break;
@@ -387,9 +392,18 @@ export default function Session({
               setThinking(false);
             }
             pl.push(action as unknown as BoardAction);
+            streamed.push(action as unknown as BoardAction);
           }
         }
-        const turn = normalizeTurn(JSON.parse(parser.text));
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(parser.text);
+        } catch {
+          // Cut off mid-reply (length limit, dropped connection): keep what Teacher already said and drew.
+          if (!streamed.length) throw new Error("Teacher's answer got cut off. Try again.");
+          parsed = { board: streamed };
+        }
+        const turn = normalizeTurn(parsed);
         if (!pl) pl = startPlayer();
         setThinking(false);
         finishTurn(turn);
@@ -739,7 +753,7 @@ export default function Session({
                       // While teaching: the line being spoken (and the one before it, fading).
                       // When done: just the last line, usually the question. The full text is in the chat.
                       line && (activeBeat === -1 ? i === lastBeatIdx : i <= activeBeat && i >= activeBeat - 1) ? (
-                        <span key={i} className={`beat ${activeBeat === -1 ? "" : i === activeBeat ? "beat--now" : "beat--past"}`}>
+                        <span key={i} data-beat={i} className={`beat ${activeBeat === -1 ? "" : i === activeBeat ? "beat--now" : "beat--past"}`}>
                           {tags.some((t) => t.n === i + 1) && <span className="beat-badge">{i + 1}</span>}
                           <MathText text={line} />{" "}
                         </span>

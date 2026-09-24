@@ -234,6 +234,14 @@ export function speak(text: string, opts: SpeakOptions = {}) {
       ended = true;
       opts.onEnd?.();
     };
+    // No audible speech (no voices, muted tab, speech error): keep the lesson's rhythm with the
+    // estimated duration. Runs at most once, and never after the line already started or ended.
+    const silent = () => {
+      if (started || ended || my !== token) return;
+      started = true;
+      opts.onStart?.(estimateMs(clean, rate));
+      setTimeout(finish, estimateMs(clean, rate));
+    };
     parts.forEach((part, i) => {
       const u = new SpeechSynthesisUtterance(part);
       if (v) u.voice = v;
@@ -245,20 +253,13 @@ export function speak(text: string, opts: SpeakOptions = {}) {
           started = true;
           opts.onStart?.(estimateMs(clean, rate));
         };
-      if (i === parts.length - 1) {
-        u.onend = finish;
-        u.onerror = finish;
-      }
+      // An error (or an end without a start) before any sound means nothing was heard.
+      u.onerror = () => (started ? i === parts.length - 1 && finish() : silent());
+      if (i === parts.length - 1) u.onend = () => (started ? finish() : silent());
       synth.speak(u);
     });
     // Some browsers never fire events (muted tab, no voices): don't hold the lesson hostage.
-    setTimeout(() => {
-      if (my === token && !started) {
-        started = true;
-        opts.onStart?.(estimateMs(clean, rate));
-        setTimeout(finish, estimateMs(clean, rate));
-      }
-    }, 900);
+    setTimeout(silent, 900);
   };
 
   if (!opts.natural || choice.startsWith("browser:")) return browserVoice();
@@ -282,8 +283,15 @@ export function speak(text: string, opts: SpeakOptions = {}) {
       URL.revokeObjectURL(url);
       if (my === token) opts.onEnd?.();
     };
-    el.onerror = () => browserVoice();
-    el.play().catch(() => browserVoice()); // autoplay blocked or decode error
+    // Both can fire for one failure (decode error + rejected play): fall back only once.
+    let fellBack = false;
+    const fallBack = () => {
+      if (fellBack || started) return;
+      fellBack = true;
+      browserVoice();
+    };
+    el.onerror = fallBack;
+    el.play().catch(fallBack); // autoplay blocked or decode error
   });
 }
 

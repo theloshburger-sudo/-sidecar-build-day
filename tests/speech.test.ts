@@ -20,3 +20,33 @@ test("exponents are spoken as powers", () => {
   assert.match(speakable("Simplify i¹⁴²"), /i to the power of 142/);
   assert.match(speakable("x^2 + 1"), /x squared/);
 });
+
+test("a browser voice that errors at once still starts and ends each line exactly once", async () => {
+  const { speak } = await import("../lib/speech");
+  const g = globalThis as Record<string, unknown>;
+  // Headless / voiceless browsers: every utterance fails immediately, with no onstart.
+  g.SpeechSynthesisUtterance = class {
+    text: string;
+    voice: unknown = null;
+    rate = 1;
+    pitch = 1;
+    onstart: (() => void) | null = null;
+    onend: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    constructor(t: string) {
+      this.text = t;
+    }
+  };
+  g.window = { speechSynthesis: { getVoices: () => [], cancel() {}, speak: (u: { onerror: (() => void) | null }) => setTimeout(() => u.onerror?.(), 5) } };
+  try {
+    const events: string[] = [];
+    await new Promise<void>((resolve) => {
+      speak("Hi there. Two sentences.", { onStart: () => events.push("start"), onEnd: () => (events.push("end"), setTimeout(resolve, 1200)) });
+    });
+    // A start after the end is what made Sidecar draw the beat a second time.
+    assert.deepEqual(events, ["start", "end"]);
+  } finally {
+    delete g.window;
+    delete g.SpeechSynthesisUtterance;
+  }
+});
