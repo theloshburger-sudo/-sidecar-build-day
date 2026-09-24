@@ -64,7 +64,7 @@ export function pointerBubbleW(label: string): number {
 export function pointerSpot(state: BoardState, b: Box, label: string): PointerSpot {
   const bw = label ? pointerBubbleW(label) : 0;
   const bh = label ? POINTER_FONT + 14 : 0;
-  const blockers: Box[] = [...(state.labels ?? [])];
+  const blockers: Box[] = [...(state.labels ?? []), ...(state.ink ?? [])];
   for (const id of state.order) {
     const el = state.els[id];
     if (!el) continue;
@@ -255,6 +255,8 @@ export interface BoardState {
   annot: Record<string, number>;
   /** Small labels already placed (graph/point labels), so new ones can dodge them. */
   labels: Box[];
+  /** Every piece of handwriting on the board (incl. titles and details that aren't elements), for the pointer to avoid. */
+  ink?: Box[];
   seq: number;
 }
 
@@ -264,7 +266,7 @@ export type Measure = (text: string, size: number) => number;
 export const approxMeasure: Measure = (text, size) => text.length * size * 0.5;
 
 export function emptyBoard(): BoardState {
-  return { cursor: { left: BOARD_TOP, right: BOARD_TOP }, els: {}, order: [], row: null, lastGraph: null, annot: {}, labels: [], seq: 0 };
+  return { cursor: { left: BOARD_TOP, right: BOARD_TOP }, els: {}, order: [], row: null, lastGraph: null, annot: {}, labels: [], ink: [], seq: 0 };
 }
 
 export function boardHeight(s: BoardState): number {
@@ -420,6 +422,7 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
     lastGraph: prev.lastGraph,
     annot: { ...(prev.annot ?? {}) },
     labels: [...(prev.labels ?? [])],
+    ink: [...(prev.ink ?? [])],
     seq: prev.seq,
   };
   const prims: Prim[] = [];
@@ -442,6 +445,8 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
   const addText = (text: string, x: number, y: number, size: number, color: string, bold = false, halo = false) => {
     const w = measure(text, size);
     prims.push({ kind: "text", key: key(), x, y, text, size, color, w, bold, halo, dur: textDur(text) });
+    (s.ink ??= []).push({ x, y: y - size * 0.85, w, h: size * 1.1 });
+    if (s.ink.length > 400) s.ink.splice(0, s.ink.length - 400);
     return w;
   };
   const addPath = (paths: Pt[][], color: string, width = 3, extra: { dashed?: boolean; fill?: string; dur?: number } = {}) => {
@@ -725,6 +730,7 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
         s.lastGraph = null;
         s.annot = {};
         s.labels = [];
+        s.ink = [];
         break;
       }
 

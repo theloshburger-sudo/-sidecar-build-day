@@ -369,3 +369,39 @@ test("pointing at a big box keeps the cursor and label off the words inside it",
     assert.ok(!ov({ x: p.spot.bx, y: p.spot.by, w: p.spot.bw, h: p.spot.bh }, w), "label covers the box's words");
   }
 });
+
+test("pointer labels never cover writing in any scripted eval session or demo lesson", async () => {
+  const { readdirSync, readFileSync } = await import("node:fs");
+  const dir = new URL("../docs/eval/sim/", import.meta.url);
+  const scripts: { name: string; turns: { board: Parameters<typeof applyActions>[1] }[] }[] = readdirSync(dir)
+    .filter((f: string) => f.endsWith(".json"))
+    .map((f: string) => ({ name: f, turns: JSON.parse(readFileSync(new URL(f, dir), "utf8")) }));
+  for (const demo of DEMO_ASSIGNMENTS) scripts.push({ name: demo.demoId, turns: demo.lesson.script.map((t) => ({ board: t.board ?? [] })) });
+  const ov = (r: { x: number; y: number; w: number; h: number }, o: typeof r, m = 0) =>
+    Math.min(r.x + r.w, o.x + o.w) - Math.max(r.x, o.x) > m && Math.min(r.y + r.h, o.y + o.h) - Math.max(r.y, o.y) > m;
+  let checked = 0;
+  for (const sc of scripts) {
+    let state = emptyBoard();
+    let written: { x: number; y: number; w: number; h: number }[] = [];
+    for (const turn of sc.turns) {
+      for (const action of turn.board) {
+        const res = applyActions(state, [action]);
+        state = res.state;
+        const before = { ink: written };
+        for (const p of res.prims) {
+          if (p.kind === "clear") written = [];
+          if (p.kind === "text") written = [...written, { x: p.x, y: p.y - p.size * 0.85, w: p.w, h: p.size * 1.1 }];
+          if (p.kind !== "point" || !p.spot || !p.label) continue;
+          checked++;
+          const target = { x: p.x, y: p.y, w: p.w, h: p.h };
+          const bubble = { x: p.spot.bx, y: p.spot.by, w: p.spot.bw, h: p.spot.bh };
+          for (const ink of before.ink) {
+            if (ov(ink, target, -2)) continue; // the thing being pointed at (and its own line)
+            assert.ok(!ov(bubble, ink, 2), `${sc.name}: label "${p.label}" covers writing at ${Math.round(ink.x)},${Math.round(ink.y)}`);
+          }
+        }
+      }
+    }
+  }
+  assert.ok(checked >= 25, `checked ${checked} pointer labels`);
+});
