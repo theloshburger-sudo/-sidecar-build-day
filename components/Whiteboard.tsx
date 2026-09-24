@@ -35,6 +35,30 @@ const INK_COLOR = "#12a150";
 
 const TRAVEL_MS = 150;
 
+// ---- Teacher's pointer, modelled on Clicky (github.com/farzaa/clicky, OverlayWindow.swift) ----
+/** Clicky parks the buddy 35×25 px off the user's cursor (≈ 27×19 board units). */
+const FOLLOW_OFFSET: Pt = [27, 19];
+/** Clicky's flight time: distance at 800 px/s, clamped to 0.6–1.4 s (a board unit is ≈ 1.3 px). */
+const flightMs = (dist: number) => Math.min(1400, Math.max(600, ((dist * 1.3) / 800) * 1000));
+/** Clicky's rest angle: tilted like a mouse cursor. */
+const REST_ROT = -35;
+
+/**
+ * One frame of Clicky's flight: a quadratic bezier arcing up by min(20% of the distance, 80),
+ * smoothstep-eased, the cursor facing along the curve and swelling to 1.3× mid-flight.
+ */
+function arcAt(from: Pt, to: Pt, lin: number): { tip: Pt; rot: number; scale: number } {
+  const t = lin * lin * (3 - 2 * lin);
+  const dist = Math.hypot(to[0] - from[0], to[1] - from[1]);
+  const c: Pt = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2 - Math.min(dist * 0.2, 80)];
+  const u = 1 - t;
+  const tip: Pt = [u * u * from[0] + 2 * u * t * c[0] + t * t * to[0], u * u * from[1] + 2 * u * t * c[1] + t * t * to[1]];
+  const dx = 2 * u * (c[0] - from[0]) + 2 * t * (to[0] - c[0]);
+  const dy = 2 * u * (c[1] - from[1]) + 2 * t * (to[1] - c[1]);
+  const rot = dist < 2 ? REST_ROT : (Math.atan2(dy, dx) * 180) / Math.PI + 90;
+  return { tip, rot, scale: 1 + Math.sin(lin * Math.PI) * 0.3 };
+}
+
 function segLengths(paths: Pt[][]): number[] {
   return paths.map((p) => {
     let l = 0;
@@ -193,6 +217,8 @@ interface PointerState {
   rot: number;
   scale: number;
   flying: boolean;
+  /** Idle: riding next to the student's mouse, like Clicky next to your cursor. */
+  follow?: boolean;
   box: { x: number; y: number; w: number; h: number };
   label: string;
   typed: number;
@@ -217,7 +243,7 @@ function Pointer({ p }: { p: PointerState }) {
   const pad = 7;
   return (
     <g className="wb-pointer" aria-hidden>
-      {!p.flying && (
+      {!p.flying && !p.follow && (
         <rect
           key={`ring-${p.key}`}
           className="wb-pointer-ring"
@@ -228,16 +254,20 @@ function Pointer({ p }: { p: PointerState }) {
           rx={10}
         />
       )}
-      <g transform={`translate(${p.tip[0]} ${p.tip[1]}) rotate(${p.rot}) scale(${p.scale})`}>
+      <g
+        className={p.follow ? "wb-pointer-follow" : undefined}
+        style={{ transform: `translate(${p.tip[0]}px, ${p.tip[1]}px) rotate(${p.rot}deg) scale(${p.scale})` }}
+      >
+        {/* Clicky's cursor: a small flat triangle in #3380FF (slimmed so its tip reads on a board), glow flaring in flight. */}
         <path
-          d="M0 0 L9.5 23 L0 18.5 L-9.5 23 Z"
+          d="M0 0 L6.5 16 L-6.5 16 Z"
           className="wb-pointer-tri"
-          style={{ filter: `drop-shadow(0 0 ${6 + (p.scale - 1) * 30}px rgba(79,195,255,0.95))` }}
+          style={{ filter: `drop-shadow(0 0 ${6 + (p.scale - 1) * 20}px #3380FF)` }}
         />
       </g>
-      {!p.flying && shown && (
+      {!p.flying && !p.follow && shown && (
         <g key={`bubble-${p.key}`} className={`wb-pointer-bubble ${right ? "" : "wb-pointer-bubble--left"}`}>
-          <rect x={bx} y={by} width={bw} height={bh} rx={bh / 2} />
+          <rect x={bx} y={by} width={bw} height={bh} rx={7} />
           <text x={bx + 11} y={by + bh / 2 + size * 0.36} fontSize={size}>
             <TextRuns text={shown} size={size} />
           </text>
@@ -296,6 +326,15 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
   const drawing = useRef<Pt[] | null>(null);
   const onInkRef = useRef(onInkChange);
   onInkRef.current = onInkChange;
+  // Teacher's pointer (Clicky-style): rides next to the student's mouse, flies to what's being
+  // talked about, holds, then flies back.
+  const mouse = useRef<Pt | null>(null);
+  const phase = useRef<"none" | "follow" | "flight" | "rest" | "return">("none");
+  const retRaf = useRef(0);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const restBeat = useRef<number | undefined>(undefined);
+  const penRef = useRef(penMode);
+  penRef.current = penMode;
   speedRef.current = speed || 1;
   onBusyRef.current = onBusyChange;
 
@@ -309,6 +348,53 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
       idleWaiters.current = [];
       w.forEach((fn) => fn());
     }
+  };
+
+  const stopReturn = () => {
+    if (retRaf.current) cancelAnimationFrame(retRaf.current);
+    retRaf.current = 0;
+    if (holdTimer.current) clearTimeout(holdTimer.current);
+    holdTimer.current = null;
+  };
+  const NO_BOX = { x: 0, y: 0, w: 0, h: 0 };
+  const followAt = (m: Pt) => {
+    const tip: Pt = [m[0] + FOLLOW_OFFSET[0], m[1] + FOLLOW_OFFSET[1]];
+    lastTip.current = tip;
+    phase.current = "follow";
+    setPointer({ key: "buddy", tip, rot: REST_ROT, scale: 1, flying: false, follow: true, box: NO_BOX, label: "", typed: 0 });
+  };
+  /** Clicky's return flight: back to the student's mouse, then follow it again. No mouse on the board: hide. */
+  const flyBack = () => {
+    stopReturn();
+    if (!mouse.current || penRef.current) {
+      phase.current = "none";
+      setPointer(null);
+      return;
+    }
+    phase.current = "return";
+    const from = lastTip.current;
+    const start = performance.now();
+    const step = (now: number) => {
+      const m = mouse.current;
+      if (!m) {
+        retRaf.current = 0;
+        phase.current = "none";
+        setPointer(null);
+        return;
+      }
+      const to: Pt = [m[0] + FOLLOW_OFFSET[0], m[1] + FOLLOW_OFFSET[1]];
+      const lin = Math.min(1, (now - start) / flightMs(Math.hypot(to[0] - from[0], to[1] - from[1])));
+      if (lin >= 1) {
+        retRaf.current = 0;
+        followAt(m);
+        return;
+      }
+      const a = arcAt(from, to, lin);
+      lastTip.current = a.tip;
+      setPointer({ key: "buddy", tip: a.tip, rot: a.rot, scale: a.scale, flying: true, box: NO_BOX, label: "", typed: 0 });
+      retRaf.current = requestAnimationFrame(step);
+    };
+    retRaf.current = requestAnimationFrame(step);
   };
 
   // ---- student ink ----
@@ -328,7 +414,14 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
     setInk((s) => [...s, [p]]);
   };
   const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (!penMode || !drawing.current) return;
+    if (!penMode) {
+      const m = toBoard(e);
+      if (!m) return;
+      mouse.current = m;
+      if (phase.current === "none" || phase.current === "follow") followAt(m);
+      return;
+    }
+    if (!drawing.current) return;
     const p = toBoard(e);
     if (!p) return;
     const last = drawing.current[drawing.current.length - 1];
@@ -336,6 +429,14 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
     drawing.current.push(p);
     const stroke = [...drawing.current];
     setInk((s) => [...s.slice(0, -1), stroke]);
+  };
+  const onPointerLeave = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (e.pointerType !== "mouse") return;
+    mouse.current = null;
+    if (phase.current === "follow") {
+      phase.current = "none";
+      setPointer(null);
+    }
   };
   const onPointerUp = () => {
     if (!drawing.current) return;
@@ -367,13 +468,16 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
       const spd0 = syncRef.current ?? speedRef.current;
       if (next.kind === "point") {
         // Flight time grows with distance (short hops are quick), and never drags even when speech is slow.
+        // Flies from wherever it is (usually next to the student's mouse). Never slower than Clicky.
+        stopReturn();
+        phase.current = "flight";
         const to = startOf(next);
         const dist = Math.hypot(to[0] - lastTip.current[0], to[1] - lastTip.current[1]);
-        const flight = Math.min(900, Math.max(420, dist * 0.9)) / Math.max(1, spd0);
+        const flight = flightMs(dist) / Math.max(1, spd0);
         cur.current = { prim: next, start: now + flight, from: lastTip.current, flight };
       } else {
-        // The stylus takes over: the pointer steps aside while Teacher draws.
-        setPointer(null);
+        // The stylus takes over: a pointer that was resting on something flies back to the student.
+        if (phase.current === "rest" || phase.current === "flight") flyBack();
         cur.current = { prim: next, start: now + TRAVEL_MS / spd0, from: lastTip.current };
       }
     }
@@ -386,17 +490,9 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
       if (now < start) {
         // Quadratic bezier arc with smoothstep easing; the cursor faces its direction of travel
         // and swells a little at the apex, then settles on landing.
-        const lin = 1 - (start - now) / (flight || 1);
-        const t = lin * lin * (3 - 2 * lin);
-        const dist = Math.hypot(to[0] - from[0], to[1] - from[1]);
-        const c: Pt = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2 - Math.min(dist * 0.2, 80)];
-        const u = 1 - t;
-        const tip: Pt = [u * u * from[0] + 2 * u * t * c[0] + t * t * to[0], u * u * from[1] + 2 * u * t * c[1] + t * t * to[1]];
-        const dx = 2 * u * (c[0] - from[0]) + 2 * t * (to[0] - c[0]);
-        const dy = 2 * u * (c[1] - from[1]) + 2 * t * (to[1] - c[1]);
-        const rot = dist < 2 ? -35 : (Math.atan2(dy, dx) * 180) / Math.PI + 90;
+        const { tip, rot, scale } = arcAt(from, to, 1 - (start - now) / (flight || 1));
         setActive(null);
-        setPointer({ key: prim.key, beat: prim.beat, tip, rot, scale: 1 + Math.sin(lin * Math.PI) * 0.3, flying: true, box, label: prim.label, typed: 0 });
+        setPointer({ key: prim.key, beat: prim.beat, tip, rot, scale, flying: true, box, label: prim.label, typed: 0 });
         follow(tip);
       } else {
         const typed = Math.min(prim.label.length, Math.floor((now - start) / 38));
@@ -404,6 +500,11 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
         if (now - start >= prim.dur / spd && typed >= prim.label.length) {
           lastTip.current = to;
           cur.current = null;
+          // Clicky holds on the target for 3 s, then flies back to the student's cursor.
+          phase.current = "rest";
+          restBeat.current = prim.beat;
+          if (holdTimer.current) clearTimeout(holdTimer.current);
+          holdTimer.current = setTimeout(() => phase.current === "rest" && flyBack(), 3000);
         }
       }
       raf.current = requestAnimationFrame(tick);
@@ -456,7 +557,12 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
       queue.current = [];
       cur.current = null;
       setActive(null);
-      setPointer(null);
+      stopReturn();
+      if (mouse.current && !penRef.current) followAt(mouse.current);
+      else {
+        phase.current = "none";
+        setPointer(null);
+      }
       setDone((prev) => {
         let out = [...prev];
         for (const p of pending) out = p.kind === "clear" ? [] : p.kind === "point" ? out : [...out, p];
@@ -517,13 +623,35 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
       queue.current = [];
       cur.current = null;
       setActive(null);
+      stopReturn();
+      phase.current = "none";
       setPointer(null);
       setDone([]);
       setBusy(false);
     },
   }), [height]);
 
-  useEffect(() => () => cancelAnimationFrame(raf.current), []);
+  useEffect(
+    () => () => {
+      cancelAnimationFrame(raf.current);
+      stopReturn();
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+  // Teacher moved on to the next line: don't vanish, fly back to the student right away.
+  useEffect(() => {
+    if (phase.current === "rest" && focusBeat != null && restBeat.current !== focusBeat) flyBack();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusBeat]);
+  // Picking up the pen hides the buddy (the student's own cursor is the pen now).
+  useEffect(() => {
+    if (penMode && (phase.current === "follow" || phase.current === "return")) {
+      stopReturn();
+      phase.current = "none";
+      setPointer(null);
+    }
+  }, [penMode]);
 
   const clearing = active?.prim.kind === "clear" ? active.t : 0;
   const isEmpty = !done.length && !active;
@@ -536,6 +664,7 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onPointerLeave={onPointerLeave}
         className="wb-svg"
         style={{ aspectRatio: `${BOARD_W} / ${height}`, touchAction: penMode ? "none" : undefined }} viewBox={`0 0 ${BOARD_W} ${height}`} preserveAspectRatio="xMidYMin meet" role="img" aria-label="Whiteboard">
         <g style={{ opacity: 1 - clearing }}>
@@ -556,7 +685,7 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
             ),
           )}
         </g>
-        {pointer && (pointer.flying || focusBeat == null || pointer.beat === focusBeat) && <Pointer p={pointer} />}
+        {pointer && (pointer.flying || pointer.follow || focusBeat == null || pointer.beat === focusBeat) && <Pointer p={pointer} />}
         {active && active.prim.kind !== "point" && <Marker tip={active.tip} erasing={active.prim.kind === "clear"} />}
       </svg>
       {isEmpty && !ink.length && empty && <div className="wb-empty">{empty}</div>}
