@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     }
     return NextResponse.json({ name, problems: splitProblems(text), source: "heuristic" });
   }
-  if (rateLimited(req, 20)) {
+  if (rateLimited(req, 20, undefined, "extract")) {
     return NextResponse.json({ error: "Too many uploads at once. Try again in a minute." }, { status: 429 });
   }
 

@@ -11,7 +11,7 @@ const MODEL = process.env.ELEVENLABS_MODEL?.trim() || "eleven_flash_v2_5";
 export async function POST(req: Request) {
   const key = process.env.ELEVENLABS_API_KEY?.trim();
   if (!key) return Response.json({ error: "no_key" }, { status: 503 });
-  if (rateLimited(req, 80)) return Response.json({ error: "rate_limited" }, { status: 429 });
+  if (rateLimited(req, 150, undefined, "tts")) return Response.json({ error: "rate_limited" }, { status: 429 });
   let text = "";
   let voice = VOICE;
   try {
