@@ -184,21 +184,54 @@ export interface SpeakOptions {
 
 const estimateMs = (text: string, rate: number) => (text.split(/\s+/).filter(Boolean).length / 2.6 / rate) * 1000 + 300;
 
+// ElevenLabs refuses requests beyond a plan's concurrency limit (2 on the free tier) with a 429,
+// and each refused line fell back to the device voice. Keep at most 2 in flight, in order.
+const TTS_MAX_IN_FLIGHT = 2;
+let ttsInFlight = 0;
+const ttsWaiting: (() => void)[] = [];
+function ttsSlot(urgent = false): Promise<() => void> {
+  return new Promise((resolve) => {
+    const take = () => {
+      ttsInFlight++;
+      let freed = false;
+      resolve(() => {
+        if (freed) return;
+        freed = true;
+        ttsInFlight--;
+        ttsWaiting.shift()?.();
+      });
+    };
+    if (ttsInFlight < TTS_MAX_IN_FLIGHT) take();
+    else if (urgent) ttsWaiting.unshift(take);
+    else ttsWaiting.push(take);
+  });
+}
+
 /** Fetch (and cache) natural-voice audio, so the next beat is ready before the current one ends. */
-function fetchTTS(text: string): Promise<Blob | null> {
+function fetchTTS(text: string, urgent = false): Promise<Blob | null> {
   const clean = speakable(text);
   if (!clean) return Promise.resolve(null);
   const voice = choice.startsWith("browser:") ? "" : choice;
   const cacheKey = `${voice}|${clean}`;
   const hit = ttsCache.get(cacheKey);
   if (hit) return hit;
-  const ctrl = new AbortController();
-  const giveUp = setTimeout(() => ctrl.abort(), 6000);
-  const p = fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: clean, voice }), signal: ctrl.signal })
-    .then((r) => (r.ok ? r.blob() : null))
-    .catch(() => null)
-    .finally(() => clearTimeout(giveUp));
+  const p = ttsSlot(urgent).then((release) => {
+    // The clock starts when the request does, not while it waits its turn.
+    const ctrl = new AbortController();
+    const giveUp = setTimeout(() => ctrl.abort(), 9000);
+    return fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: clean, voice }), signal: ctrl.signal })
+      .then((r) => (r.ok ? r.blob() : null))
+      .catch(() => null)
+      .finally(() => {
+        clearTimeout(giveUp);
+        release();
+      });
+  });
   ttsCache.set(cacheKey, p);
+  // A failed clip isn't remembered: the next time this line comes up, try again.
+  void p.then((b) => {
+    if (!b && ttsCache.get(cacheKey) === p) ttsCache.delete(cacheKey);
+  });
   if (ttsCache.size > 60) ttsCache.delete(ttsCache.keys().next().value!);
   return p;
 }
@@ -287,7 +320,8 @@ export function speak(text: string, opts: SpeakOptions = {}) {
 
   if (!opts.natural || choice.startsWith("browser:")) return browserVoice();
 
-  fetchTTS(text).then((blob) => {
+  // The line being said now goes ahead of prefetches for later lines.
+  fetchTTS(text, true).then((blob) => {
     if (my !== token) return;
     if (!blob) return browserVoice();
     const url = URL.createObjectURL(blob);

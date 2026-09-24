@@ -107,3 +107,35 @@ test("a device voice that can't speak is skipped: the line is said again with th
     delete g.SpeechSynthesisUtterance;
   }
 });
+
+test("natural-voice clips are fetched at most 2 at a time, and a failed clip is tried again later", async () => {
+  const { prefetchVoice, setVoiceChoice } = await import("../lib/speech");
+  const g = globalThis as Record<string, unknown>;
+  const realFetch = g.fetch;
+  let inFlight = 0;
+  let peak = 0;
+  let calls = 0;
+  g.fetch = async () => {
+    const n = ++calls;
+    inFlight++;
+    peak = Math.max(peak, inFlight);
+    await new Promise((r) => setTimeout(r, 20));
+    inFlight--;
+    return { ok: n !== 1, blob: async () => ({}) }; // the very first clip fails
+  };
+  try {
+    setVoiceChoice("george");
+    const lines = ["One line.", "Two line.", "Three line.", "Four line.", "Five line."];
+    lines.forEach((l) => prefetchVoice(l));
+    await new Promise((r) => setTimeout(r, 200));
+    assert.equal(calls, 5);
+    assert.ok(peak <= 2, `peak concurrency ${peak}`);
+    prefetchVoice("One line."); // failed before: not cached, so it's fetched again
+    prefetchVoice("Two line."); // succeeded: served from cache
+    await new Promise((r) => setTimeout(r, 60));
+    assert.equal(calls, 6);
+  } finally {
+    g.fetch = realFetch;
+    setVoiceChoice("");
+  }
+});
