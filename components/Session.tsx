@@ -397,7 +397,11 @@ export default function Session({
         }
         let parsed: unknown;
         try {
-          parsed = JSON.parse(parser.text);
+          // The JSON object itself, even if a stray ``` fence or a word slipped in around it.
+          const raw = parser.text;
+          const a = raw.indexOf("{");
+          const b = raw.lastIndexOf("}");
+          parsed = JSON.parse(a >= 0 && b > a ? raw.slice(a, b + 1) : raw);
         } catch {
           // Cut off mid-reply (length limit, dropped connection): keep what Teacher already said and drew.
           if (!streamed.length) throw new Error("Teacher's answer got cut off. Try again.");

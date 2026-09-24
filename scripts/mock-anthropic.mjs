@@ -8,6 +8,7 @@ const port = Number(process.argv[2] || 4010);
 const log = process.argv[3];
 const REJECT_SCHEMA_ONCE = process.env.MOCK_REJECT_SCHEMA === "1";
 let rejected = false;
+let emptied = false;
 // MOCK_OVERLOAD=n: the first n streamed calls fail with an overloaded_error event before any text.
 let overloads = Number(process.env.MOCK_OVERLOAD || 0);
 let turnNo = 0;
@@ -83,6 +84,11 @@ createServer((req, res) => {
       res.writeHead(200, { "content-type": "text/event-stream" });
       res.write(`event: error\ndata: ${JSON.stringify({ type: "error", error: { type: "overloaded_error", message: "Overloaded" } })}\n\n`);
       return res.end();
+    }
+    // MOCK_EMPTY_ONCE=1: the first schema-constrained stream ends without any text.
+    if (json.stream && hasFormat && process.env.MOCK_EMPTY_ONCE === "1" && !emptied) {
+      emptied = true;
+      text = "";
     }
     if (json.stream) {
       res.writeHead(200, { "content-type": "text/event-stream" });

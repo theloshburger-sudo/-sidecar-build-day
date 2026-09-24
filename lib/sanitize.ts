@@ -22,6 +22,8 @@ export function normalizeTurn(raw: unknown): TutorTurn {
         .map((a) => String(a.text).trim())
         .join(" ")
         .slice(0, 900) ||
+      // Nothing to say out loud? Ask the question rather than a canned filler line.
+      s(r.question, 400) ||
       "Let's keep going.",
     phase,
     board,
