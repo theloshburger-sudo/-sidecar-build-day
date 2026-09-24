@@ -1,0 +1,257 @@
+[
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Hi! The factory's pollution costs its neighbors 2 dollars for every unit, but the factory doesn't pay it."
+   },
+   {
+    "type": "box",
+    "id": "given",
+    "text": "Given",
+    "items": [
+     "External cost = $2 per unit",
+     "Neighbors pay it, not the factory"
+    ],
+    "zone": "left",
+    "color": "ink"
+   },
+   {
+    "type": "narrate",
+    "text": "Let's draw the market. Demand and the factory's own supply cross at the market quantity."
+   },
+   {
+    "type": "graph",
+    "id": "g1",
+    "zone": "right",
+    "xMin": 0,
+    "xMax": 12,
+    "yMin": 0,
+    "yMax": 12,
+    "xLabel": "Quantity",
+    "yLabel": "Price",
+    "text": "Pollution"
+   },
+   {
+    "type": "plot",
+    "target": "g1",
+    "fn": "10-0.5x",
+    "items": [],
+    "text": "D",
+    "color": "blue"
+   },
+   {
+    "type": "plot",
+    "target": "g1",
+    "fn": "2+0.5x",
+    "items": [],
+    "text": "S (private)",
+    "color": "orange"
+   },
+   {
+    "type": "narrate",
+    "text": "Where are you stuck?"
+   }
+  ],
+  "say": "",
+  "phase": "diagnose",
+  "question": "Where are you stuck?",
+  "choices": [
+   "What's a social cost?",
+   "How do I draw it?",
+   "Check my answer"
+  ],
+  "gap": "",
+  "plan": [],
+  "step": 0,
+  "videos": [],
+  "practice": "",
+  "verdict": "none",
+  "insight": ""
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "The true cost to society is the factory's cost plus the 2 dollars of pollution, so we shift supply up by 2."
+   },
+   {
+    "type": "plot",
+    "target": "g1",
+    "fn": "4+0.5x",
+    "items": [],
+    "text": "S (social)",
+    "color": "red"
+   },
+   {
+    "type": "graphArrow",
+    "target": "g1",
+    "x1": 4,
+    "y1": 4,
+    "x2": 4,
+    "y2": 6,
+    "text": "+$2"
+   },
+   {
+    "type": "narrate",
+    "text": "The market stops where private supply meets demand, at 8 units."
+   },
+   {
+    "type": "point",
+    "target": "g1",
+    "x": 8,
+    "y": 6,
+    "text": "Market"
+   },
+   {
+    "type": "narrate",
+    "text": "Your turn: where does the social supply cross demand?"
+   },
+   {
+    "type": "pointTo",
+    "target": "g1",
+    "match": "6,7",
+    "text": "cross here?"
+   }
+  ],
+  "say": "",
+  "phase": "teach",
+  "question": "Your turn: where does the red social supply cross demand? What quantity?",
+  "choices": [],
+  "gap": "",
+  "plan": [
+   "Private market",
+   "Add the $2",
+   "Compare quantities"
+  ],
+  "step": 1,
+  "videos": [],
+  "practice": "",
+  "verdict": "none",
+  "insight": ""
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Good guess, but 10 is further right, and the social optimum has to be LESS than the market."
+   },
+   {
+    "type": "pointTo",
+    "target": "g1",
+    "match": "8,6",
+    "text": "market is 8"
+   },
+   {
+    "type": "narrate",
+    "text": "Set 10 minus half Q equal to 4 plus half Q. What Q do you get?"
+   },
+   {
+    "type": "write",
+    "id": "eq",
+    "text": "10 − 0.5Q = 4 + 0.5Q",
+    "zone": "left",
+    "size": "md",
+    "color": "ink"
+   }
+  ],
+  "say": "",
+  "phase": "check",
+  "question": "Your turn: solve 10 − 0.5Q = 4 + 0.5Q.",
+  "choices": [],
+  "gap": "",
+  "plan": [],
+  "step": 0,
+  "videos": [],
+  "practice": "",
+  "verdict": "incorrect",
+  "insight": ""
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Yes, Q is 6. That's the social optimum."
+   },
+   {
+    "type": "point",
+    "target": "g1",
+    "x": 6,
+    "y": 7,
+    "text": "Optimum"
+   },
+   {
+    "type": "narrate",
+    "text": "The market makes 8, but society only wants 6. Those 2 extra units cost more than they're worth."
+   },
+   {
+    "type": "graphArrow",
+    "target": "g1",
+    "x1": 6,
+    "y1": 2,
+    "x2": 8,
+    "y2": 2,
+    "text": "overproduce"
+   },
+   {
+    "type": "pointTo",
+    "target": "g1",
+    "match": "7,6.5",
+    "text": "too much"
+   }
+  ],
+  "say": "",
+  "phase": "check",
+  "question": "Your turn: why does the market overproduce?",
+  "choices": [],
+  "gap": "",
+  "plan": [],
+  "step": 2,
+  "videos": [],
+  "practice": "",
+  "verdict": "correct",
+  "insight": ""
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Exactly: the factory ignores the 2 dollars it pushes onto neighbors, so its costs look too low."
+   },
+   {
+    "type": "note",
+    "id": "key",
+    "text": "Key idea",
+    "items": [
+     "Negative externality → market Q too high",
+     "Fix: a $2 per unit tax"
+    ],
+    "zone": "left",
+    "color": "green"
+   },
+   {
+    "type": "narrate",
+    "text": "Try one: a bakery's smell gives neighbors a 1 dollar benefit per loaf. Too many loaves, or too few?"
+   },
+   {
+    "type": "divider",
+    "zone": "left"
+   },
+   {
+    "type": "askQuestion",
+    "text": "Positive externality?"
+   }
+  ],
+  "say": "",
+  "phase": "practice",
+  "question": "Too many or too few? Why?",
+  "choices": [],
+  "gap": "",
+  "plan": [],
+  "step": 0,
+  "videos": [],
+  "practice": "A bakery's smell gives neighbors a $1 benefit per loaf. Does the market make too many or too few loaves? Why?",
+  "verdict": "correct",
+  "insight": ""
+ }
+]

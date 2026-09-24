@@ -1,0 +1,239 @@
+[
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Hi! In June 1914, Archduke Franz Ferdinand of Austria-Hungary was shot in Sarajevo by a Serbian nationalist."
+   },
+   {
+    "type": "timeline",
+    "id": "tl",
+    "text": "Summer 1914",
+    "items": [
+     "Jun 28: assassination",
+     "Jul 28: Austria declares war",
+     "Aug 1–4: war spreads"
+    ]
+   },
+   {
+    "type": "narrate",
+    "text": "In just five weeks, one murder pulled in most of Europe. Where do you want to start?"
+   }
+  ],
+  "say": "",
+  "phase": "diagnose",
+  "question": "Where are you stuck?",
+  "choices": [
+   "What's the alliance system?",
+   "Why so fast?",
+   "Help me write my answer"
+  ],
+  "gap": "",
+  "plan": [],
+  "step": 0,
+  "videos": [],
+  "practice": "",
+  "verdict": "none",
+  "insight": ""
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Europe had two teams. Each country promised to defend its partners, so a fight with one meant a fight with all."
+   },
+   {
+    "type": "box",
+    "id": "tri",
+    "text": "Triple Alliance",
+    "items": [
+     "Germany",
+     "Austria-Hungary",
+     "(Italy)"
+    ],
+    "zone": "left",
+    "color": "red"
+   },
+   {
+    "type": "box",
+    "id": "ent",
+    "text": "Triple Entente",
+    "items": [
+     "Russia",
+     "France",
+     "Britain"
+    ],
+    "zone": "right",
+    "color": "blue"
+   },
+   {
+    "type": "narrate",
+    "text": "Let's chain it. First link: Austria blames Serbia and declares war."
+   },
+   {
+    "type": "flow",
+    "id": "ch",
+    "text": "The chain reaction",
+    "items": [],
+    "zone": "full",
+    "color": "ink"
+   },
+   {
+    "type": "add",
+    "target": "ch",
+    "text": "Austria attacks Serbia",
+    "color": "ink"
+   },
+   {
+    "type": "narrate",
+    "text": "Your turn: Serbia had a big protector. Who, and what did they do next?"
+   },
+   {
+    "type": "pointTo",
+    "target": "ent",
+    "match": "Russia",
+    "text": "Serbia's ally"
+   }
+  ],
+  "say": "",
+  "phase": "teach",
+  "question": "Your turn: who protected Serbia, and what did they do?",
+  "choices": [],
+  "gap": "",
+  "plan": [
+   "Two alliances",
+   "The chain",
+   "Why it spread"
+  ],
+  "step": 0,
+  "videos": [],
+  "practice": "",
+  "verdict": "none",
+  "insight": ""
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Yes, Russia mobilized to protect Serbia, because they were fellow Slavs and Russia wanted influence in the Balkans."
+   },
+   {
+    "type": "add",
+    "target": "ch",
+    "text": "Russia mobilizes",
+    "color": "ink"
+   },
+   {
+    "type": "narrate",
+    "text": "And because Germany was Austria's ally, Germany declared war on Russia, then on Russia's partner, France."
+   },
+   {
+    "type": "add",
+    "target": "ch",
+    "text": "Germany → Russia, France",
+    "color": "ink"
+   },
+   {
+    "type": "pointTo",
+    "target": "tri",
+    "match": "Germany",
+    "text": "backs Austria"
+   }
+  ],
+  "say": "",
+  "phase": "check",
+  "question": "Your turn: Britain joined next. What pulled them in?",
+  "choices": [],
+  "gap": "",
+  "plan": [],
+  "step": 0,
+  "videos": [],
+  "practice": "",
+  "verdict": "correct",
+  "insight": ""
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Good question! Germany's plan was to knock out France fast, before Russia was ready, and the quickest road to Paris ran through Belgium."
+   },
+   {
+    "type": "add",
+    "target": "ch",
+    "text": "Germany invades Belgium",
+    "color": "ink"
+   },
+   {
+    "type": "narrate",
+    "text": "Britain had promised to protect Belgium's neutrality back in 1839, so the invasion brought Britain in on August 4."
+   },
+   {
+    "type": "add",
+    "target": "ch",
+    "text": "Britain declares war",
+    "color": "ink"
+   },
+   {
+    "type": "pointTo",
+    "target": "ch.4",
+    "match": "",
+    "text": "the trigger"
+   }
+  ],
+  "say": "",
+  "phase": "teach",
+  "question": "Your turn: in one sentence, how did the alliances turn a local war into a world war?",
+  "choices": [],
+  "gap": "",
+  "plan": [],
+  "step": 0,
+  "videos": [],
+  "practice": "",
+  "verdict": "none",
+  "insight": "Asks why; wants motives, not just events"
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "That's a strong sentence: each promise pulled in one more country, like dominoes."
+   },
+   {
+    "type": "pointTo",
+    "target": "ch.1",
+    "match": "",
+    "text": "one domino"
+   },
+   {
+    "type": "pointTo",
+    "target": "ch.5",
+    "match": "",
+    "text": "…knocks all"
+   },
+   {
+    "type": "narrate",
+    "text": "For your essay, try this: explain one more link on your own. Why did Germany back Austria so strongly?"
+   },
+   {
+    "type": "divider",
+    "zone": "full"
+   },
+   {
+    "type": "askQuestion",
+    "text": "Why back Austria?"
+   }
+  ],
+  "say": "",
+  "phase": "practice",
+  "question": "Why did Germany back Austria so strongly?",
+  "choices": [],
+  "gap": "",
+  "plan": [],
+  "step": 0,
+  "videos": [],
+  "practice": "In 2–3 sentences, explain why Germany gave Austria-Hungary a 'blank cheque' in July 1914.",
+  "verdict": "correct",
+  "insight": ""
+ }
+]

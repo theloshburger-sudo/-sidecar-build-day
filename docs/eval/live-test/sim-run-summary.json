@@ -1,0 +1,683 @@
+[
+ {
+  "session": "algebra",
+  "errors": [],
+  "turns": [
+   {
+    "k": 0,
+    "student": null,
+    "done": true,
+    "firstBeatMs": 631,
+    "apiFirstByteMs": 325,
+    "apiTotalMs": 904,
+    "totalMs": 12085,
+    "alert": "",
+    "nBeats": "1d 0d+2p 0d",
+    "strokesPerBeat": {
+     "0": 1
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "2:times 3",
+     "2:then + 7",
+     "0:then + 7"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 1,
+    "student": "I don't know how to start",
+    "done": true,
+    "firstBeatMs": 690,
+    "apiFirstByteMs": 319,
+    "apiTotalMs": 926,
+    "totalMs": 13415,
+    "alert": "",
+    "nBeats": "1d 1d 0d+1p",
+    "strokesPerBeat": {
+     "0": 2,
+     "1": 2
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "3:your turn",
+     "0:your turn"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 2,
+    "student": "29",
+    "done": true,
+    "firstBeatMs": 712,
+    "apiFirstByteMs": 318,
+    "apiTotalMs": 814,
+    "totalMs": 5706,
+    "alert": "",
+    "nBeats": "0d+1p 1d",
+    "strokesPerBeat": {
+     "1": 1
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "1:22 − 7"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 3,
+    "student": "why do we subtract 7?",
+    "done": true,
+    "firstBeatMs": 690,
+    "apiFirstByteMs": 314,
+    "apiTotalMs": 949,
+    "totalMs": 17210,
+    "alert": "",
+    "nBeats": "1d 0d+1p 0d+1p",
+    "strokesPerBeat": {
+     "0": 4
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "2:cancels out",
+     "3:your turn",
+     "0:your turn"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 4,
+    "student": "15",
+    "done": true,
+    "firstBeatMs": 716,
+    "apiFirstByteMs": 326,
+    "apiTotalMs": 720,
+    "totalMs": 8274,
+    "alert": "",
+    "nBeats": "1d 0d+1p",
+    "strokesPerBeat": {
+     "0": 1
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "2:× 3 left",
+     "0:× 3 left"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 5,
+    "student": "x = 5",
+    "done": true,
+    "firstBeatMs": 702,
+    "apiFirstByteMs": 326,
+    "apiTotalMs": 903,
+    "totalMs": 11091,
+    "alert": "",
+    "nBeats": "2d 1d 2d",
+    "strokesPerBeat": {
+     "0": 3,
+     "1": 1,
+     "2": 2
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [],
+    "pointerCovers": [],
+    "layout": []
+   }
+  ]
+ },
+ {
+  "session": "accounting",
+  "errors": [],
+  "turns": [
+   {
+    "k": 0,
+    "student": null,
+    "done": true,
+    "firstBeatMs": 621,
+    "apiFirstByteMs": 320,
+    "apiTotalMs": 961,
+    "totalMs": 17330,
+    "alert": "",
+    "nBeats": "1d 1d 0d",
+    "strokesPerBeat": {
+     "0": 5,
+     "1": 12
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 1,
+    "student": "Which accounts do I use?",
+    "done": true,
+    "firstBeatMs": 693,
+    "apiFirstByteMs": 322,
+    "apiTotalMs": 1023,
+    "totalMs": 17984,
+    "alert": "",
+    "nBeats": "1d 1d 0d+1p",
+    "strokesPerBeat": {
+     "0": 6,
+     "1": 1
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "3:count months",
+     "0:count months"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 2,
+    "student": "2 months, so 2,000",
+    "done": true,
+    "firstBeatMs": 694,
+    "apiFirstByteMs": 325,
+    "apiTotalMs": 804,
+    "totalMs": 9707,
+    "alert": "",
+    "nBeats": "0d+2p 0d+1p",
+    "strokesPerBeat": {},
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "1:start",
+     "1:3 months later",
+     "2:per month",
+     "0:per month"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 3,
+    "student": "3,000",
+    "done": true,
+    "firstBeatMs": 680,
+    "apiFirstByteMs": 314,
+    "apiTotalMs": 952,
+    "totalMs": 16150,
+    "alert": "",
+    "nBeats": "1d 0d+1p 1d",
+    "strokesPerBeat": {
+     "0": 6,
+     "2": 4
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "2:was 12,000"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 4,
+    "student": "can you show it differently?",
+    "done": true,
+    "firstBeatMs": 897,
+    "apiFirstByteMs": 312,
+    "apiTotalMs": 1194,
+    "totalMs": 12099,
+    "alert": "",
+    "nBeats": "3d 2d+1p",
+    "strokesPerBeat": {
+     "0": 3,
+     "1": 2
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "2:still an asset",
+     "0:still an asset"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 5,
+    "student": "9,000",
+    "done": true,
+    "firstBeatMs": 690,
+    "apiFirstByteMs": 313,
+    "apiTotalMs": 858,
+    "totalMs": 8315,
+    "alert": "",
+    "nBeats": "1d 2d",
+    "strokesPerBeat": {
+     "0": 1,
+     "1": 2
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [],
+    "pointerCovers": [],
+    "layout": []
+   }
+  ]
+ },
+ {
+  "session": "econ",
+  "errors": [],
+  "turns": [
+   {
+    "k": 0,
+    "student": null,
+    "done": true,
+    "firstBeatMs": 629,
+    "apiFirstByteMs": 317,
+    "apiTotalMs": 1083,
+    "totalMs": 14831,
+    "alert": "",
+    "nBeats": "2d 3d 0d",
+    "strokesPerBeat": {
+     "0": 2,
+     "1": 43
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 1,
+    "student": "How do I find equilibrium?",
+    "done": true,
+    "firstBeatMs": 671,
+    "apiFirstByteMs": 317,
+    "apiTotalMs": 893,
+    "totalMs": 14051,
+    "alert": "",
+    "nBeats": "1d+1p 1d 0d",
+    "strokesPerBeat": {
+     "0": 1,
+     "1": 2
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "1:they meet"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 2,
+    "student": "Q = 10?",
+    "done": true,
+    "firstBeatMs": 706,
+    "apiFirstByteMs": 314,
+    "apiTotalMs": 738,
+    "totalMs": 5826,
+    "alert": "",
+    "nBeats": "0d+1p 1d",
+    "strokesPerBeat": {
+     "1": 1
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "1:still here"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 3,
+    "student": "Q = 8",
+    "done": true,
+    "firstBeatMs": 682,
+    "apiFirstByteMs": 314,
+    "apiTotalMs": 892,
+    "totalMs": 12986,
+    "alert": "",
+    "nBeats": "1d 1d 0d+1p",
+    "strokesPerBeat": {
+     "0": 1,
+     "1": 3
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "3:gives 6 too",
+     "0:gives 6 too"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 4,
+    "student": "surplus",
+    "done": true,
+    "firstBeatMs": 693,
+    "apiFirstByteMs": 317,
+    "apiTotalMs": 785,
+    "totalMs": 7432,
+    "alert": "",
+    "nBeats": "1d 2d",
+    "strokesPerBeat": {
+     "0": 3,
+     "1": 2
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [],
+    "pointerCovers": [],
+    "layout": []
+   }
+  ]
+ },
+ {
+  "session": "externality",
+  "errors": [],
+  "turns": [
+   {
+    "k": 0,
+    "student": null,
+    "done": true,
+    "firstBeatMs": 633,
+    "apiFirstByteMs": 321,
+    "apiTotalMs": 1092,
+    "totalMs": 15952,
+    "alert": "",
+    "nBeats": "1d 3d 0d",
+    "strokesPerBeat": {
+     "0": 4,
+     "1": 39
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 1,
+    "student": "How do I draw it?",
+    "done": true,
+    "firstBeatMs": 693,
+    "apiFirstByteMs": 315,
+    "apiTotalMs": 980,
+    "totalMs": 18473,
+    "alert": "",
+    "nBeats": "2d 1d 0d+1p",
+    "strokesPerBeat": {
+     "0": 5,
+     "1": 3
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "3:cross here?",
+     "0:cross here?"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 2,
+    "student": "Q = 10?",
+    "done": true,
+    "firstBeatMs": 697,
+    "apiFirstByteMs": 313,
+    "apiTotalMs": 766,
+    "totalMs": 10810,
+    "alert": "",
+    "nBeats": "0d+1p 1d",
+    "strokesPerBeat": {
+     "1": 1
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "1:market is 8"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 3,
+    "student": "Q = 6",
+    "done": true,
+    "firstBeatMs": 670,
+    "apiFirstByteMs": 314,
+    "apiTotalMs": 771,
+    "totalMs": 9854,
+    "alert": "",
+    "nBeats": "1d 1d+1p",
+    "strokesPerBeat": {
+     "0": 3,
+     "1": 3
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "2:too much",
+     "0:too much"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 4,
+    "student": "because the factory doesn't pay for the pollution",
+    "done": true,
+    "firstBeatMs": 679,
+    "apiFirstByteMs": 316,
+    "apiTotalMs": 919,
+    "totalMs": 12575,
+    "alert": "",
+    "nBeats": "1d 2d",
+    "strokesPerBeat": {
+     "0": 4,
+     "1": 2
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [],
+    "pointerCovers": [],
+    "layout": []
+   }
+  ]
+ },
+ {
+  "session": "history",
+  "errors": [],
+  "turns": [
+   {
+    "k": 0,
+    "student": null,
+    "done": true,
+    "firstBeatMs": 621,
+    "apiFirstByteMs": 323,
+    "apiTotalMs": 808,
+    "totalMs": 7644,
+    "alert": "",
+    "nBeats": "1d 0d",
+    "strokesPerBeat": {
+     "0": 12
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 1,
+    "student": "What's the alliance system?",
+    "done": true,
+    "firstBeatMs": 883,
+    "apiFirstByteMs": 315,
+    "apiTotalMs": 1133,
+    "totalMs": 16641,
+    "alert": "",
+    "nBeats": "2d 2d 0d+1p",
+    "strokesPerBeat": {
+     "0": 10,
+     "1": 3
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "3:Serbia's ally",
+     "0:Serbia's ally"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 2,
+    "student": "Russia, they got their army ready",
+    "done": true,
+    "firstBeatMs": 682,
+    "apiFirstByteMs": 313,
+    "apiTotalMs": 857,
+    "totalMs": 14917,
+    "alert": "",
+    "nBeats": "1d 1d+1p",
+    "strokesPerBeat": {
+     "0": 4,
+     "1": 5
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "2:backs Austria",
+     "0:backs Austria"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 3,
+    "student": "why did Germany go through Belgium though?",
+    "done": true,
+    "firstBeatMs": 661,
+    "apiFirstByteMs": 313,
+    "apiTotalMs": 915,
+    "totalMs": 14725,
+    "alert": "",
+    "nBeats": "1d 1d+1p",
+    "strokesPerBeat": {
+     "0": 5,
+     "1": 4
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "2:the trigger",
+     "0:the trigger"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 4,
+    "student": "the alliances meant every country that got attacked pulled its allies in, so it spread",
+    "done": true,
+    "firstBeatMs": 690,
+    "apiFirstByteMs": 316,
+    "apiTotalMs": 895,
+    "totalMs": 11553,
+    "alert": "",
+    "nBeats": "0d+2p 2d",
+    "strokesPerBeat": {
+     "1": 2
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "1:one domino",
+     "1:…knocks all"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   }
+  ]
+ },
+ {
+  "session": "clock",
+  "errors": [],
+  "turns": [
+   {
+    "k": 0,
+    "student": null,
+    "done": true,
+    "firstBeatMs": 660,
+    "apiFirstByteMs": 317,
+    "apiTotalMs": 1560,
+    "totalMs": 24454,
+    "alert": "",
+    "nBeats": "2d 2d 2d 1d+1p",
+    "strokesPerBeat": {
+     "0": 2,
+     "1": 2,
+     "2": 2,
+     "3": 3
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "4:i4 = 1",
+     "0:i4 = 1"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 1,
+    "student": "at i, 3 o'clock",
+    "done": true,
+    "firstBeatMs": 680,
+    "apiFirstByteMs": 315,
+    "apiTotalMs": 894,
+    "totalMs": 11139,
+    "alert": "",
+    "nBeats": "0d+1p 1d 1d",
+    "strokesPerBeat": {
+     "1": 1,
+     "2": 1
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "1:i5 = i"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 2,
+    "student": "i?",
+    "done": true,
+    "firstBeatMs": 669,
+    "apiFirstByteMs": 315,
+    "apiTotalMs": 832,
+    "totalMs": 10485,
+    "alert": "",
+    "nBeats": "0d+2p 0d+1p",
+    "strokesPerBeat": {},
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "1:35 laps",
+     "1:2 more",
+     "2:i142 = −1",
+     "0:i142 = −1"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   },
+   {
+    "k": 3,
+    "student": "−i",
+    "done": true,
+    "firstBeatMs": 698,
+    "apiFirstByteMs": 318,
+    "apiTotalMs": 688,
+    "totalMs": 7195,
+    "alert": "",
+    "nBeats": "0d+1p 2d",
+    "strokesPerBeat": {
+     "1": 2
+    },
+    "strokesAfterLastBeat": 0,
+    "pointerLabels": [
+     "1:i143 = −i"
+    ],
+    "pointerCovers": [],
+    "layout": []
+   }
+  ]
+ }
+]

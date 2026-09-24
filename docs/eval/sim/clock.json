@@ -1,0 +1,260 @@
+[
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Let's draw the powers of i as a clock, like you asked. First the clock face."
+   },
+   {
+    "type": "canvas",
+    "id": "clk",
+    "zone": "left",
+    "text": "The i-clock"
+   },
+   {
+    "type": "sketch",
+    "id": "face",
+    "target": "clk",
+    "kind": "circle",
+    "x": 50,
+    "y": 50,
+    "x2": 0,
+    "y2": 0,
+    "r": 34,
+    "text": "",
+    "items": [],
+    "color": "ink"
+   },
+   {
+    "type": "narrate",
+    "text": "We start at the top: i to the zero is 1. Multiplying by i turns us a quarter clockwise, so i sits at 3 o'clock."
+   },
+   {
+    "type": "sketch",
+    "id": "p0",
+    "target": "clk",
+    "kind": "text",
+    "x": 50,
+    "y": 8,
+    "x2": 0,
+    "y2": 0,
+    "r": 0,
+    "text": "1",
+    "items": [],
+    "color": "green"
+   },
+   {
+    "type": "sketch",
+    "id": "p1",
+    "target": "clk",
+    "kind": "text",
+    "x": 92,
+    "y": 50,
+    "x2": 0,
+    "y2": 0,
+    "r": 0,
+    "text": "i",
+    "items": [],
+    "color": "blue"
+   },
+   {
+    "type": "narrate",
+    "text": "One more quarter turn: i squared is minus 1 at 6 o'clock, and i cubed is minus i at 9."
+   },
+   {
+    "type": "sketch",
+    "id": "p2",
+    "target": "clk",
+    "kind": "text",
+    "x": 50,
+    "y": 93,
+    "x2": 0,
+    "y2": 0,
+    "r": 0,
+    "text": "−1",
+    "items": [],
+    "color": "red"
+   },
+   {
+    "type": "sketch",
+    "id": "p3",
+    "target": "clk",
+    "kind": "text",
+    "x": 8,
+    "y": 50,
+    "x2": 0,
+    "y2": 0,
+    "r": 0,
+    "text": "−i",
+    "items": [],
+    "color": "purple"
+   },
+   {
+    "type": "narrate",
+    "text": "This arrow is the key: four quarter turns make one full lap, so i to the fourth lands right back on 1."
+   },
+   {
+    "type": "sketch",
+    "id": "",
+    "target": "clk",
+    "kind": "arc",
+    "x": 50,
+    "y": 50,
+    "x2": 10,
+    "y2": 350,
+    "r": 24,
+    "text": "×i = ¼ turn",
+    "items": [],
+    "color": "orange"
+   },
+   {
+    "type": "pointTo",
+    "target": "p0",
+    "match": "",
+    "text": "i⁴ = 1"
+   }
+  ],
+  "say": "",
+  "phase": "teach",
+  "question": "Your turn: where on the clock is i^5?",
+  "choices": [],
+  "gap": "",
+  "plan": [
+   "Build the clock",
+   "Laps of 4",
+   "Big powers"
+  ],
+  "step": 0,
+  "videos": [],
+  "practice": "",
+  "verdict": "none",
+  "insight": ""
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Yes! i to the fifth is one quarter turn past the top, so it's back at 3 o'clock: i."
+   },
+   {
+    "type": "pointTo",
+    "target": "p1",
+    "match": "",
+    "text": "i⁵ = i"
+   },
+   {
+    "type": "narrate",
+    "text": "Every 4 steps is a full lap. So for any power, count the full laps and look at what's left over."
+   },
+   {
+    "type": "write",
+    "id": "rule",
+    "text": "iⁿ: divide n by 4, use the remainder",
+    "zone": "left",
+    "size": "md",
+    "color": "blue"
+   },
+   {
+    "type": "narrate",
+    "text": "Your turn: what's i to the 142?"
+   },
+   {
+    "type": "write",
+    "id": "q",
+    "text": "i^142 = i^(140 + 2)",
+    "zone": "left",
+    "size": "lg",
+    "color": "ink"
+   }
+  ],
+  "say": "",
+  "phase": "check",
+  "question": "Your turn: what is i^142?",
+  "choices": [],
+  "gap": "",
+  "plan": [],
+  "step": 0,
+  "videos": [],
+  "practice": "",
+  "verdict": "correct",
+  "insight": ""
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Close! 140 is 35 full laps, which brings us back to 1 at the top. Then 2 more quarter turns."
+   },
+   {
+    "type": "pointTo",
+    "target": "q",
+    "match": "140",
+    "text": "35 laps"
+   },
+   {
+    "type": "pointTo",
+    "target": "q",
+    "match": "2",
+    "text": "2 more"
+   },
+   {
+    "type": "narrate",
+    "text": "Two quarter turns from the top goes to i, then down to minus 1. So it's minus 1, not i."
+   },
+   {
+    "type": "pointTo",
+    "target": "p2",
+    "match": "",
+    "text": "i¹⁴² = −1"
+   }
+  ],
+  "say": "",
+  "phase": "check",
+  "question": "Your turn: what is i^143?",
+  "choices": [],
+  "gap": "",
+  "plan": [],
+  "step": 0,
+  "videos": [],
+  "practice": "",
+  "verdict": "incorrect",
+  "insight": "Loses count when stepping around the cycle"
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Exactly, minus i. One more step past minus 1."
+   },
+   {
+    "type": "pointTo",
+    "target": "p3",
+    "match": "",
+    "text": "i¹⁴³ = −i"
+   },
+   {
+    "type": "narrate",
+    "text": "Try one: what's i to the 50?"
+   },
+   {
+    "type": "divider",
+    "zone": "left"
+   },
+   {
+    "type": "askQuestion",
+    "text": "i⁵⁰ = ?"
+   }
+  ],
+  "say": "",
+  "phase": "practice",
+  "question": "What is i^50?",
+  "choices": [],
+  "gap": "",
+  "plan": [],
+  "step": 0,
+  "videos": [],
+  "practice": "Find i^50.",
+  "verdict": "correct",
+  "insight": ""
+ }
+]

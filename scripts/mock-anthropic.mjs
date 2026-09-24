@@ -74,7 +74,9 @@ createServer((req, res) => {
     const payload = isExtract
       ? { assignmentName: "Homework 5", problems: [{ title: "1. Solve 5x − 4 = 21", text: "1. Solve 5x − 4 = 21", subject: "Algebra" }] }
       : turns[Math.min(turnNo++, turns.length - 1)];
-    const text = hasFormat ? JSON.stringify(payload) : "```json\n" + JSON.stringify(payload) + "\n```";
+    let text = hasFormat ? JSON.stringify(payload) : "```json\n" + JSON.stringify(payload) + "\n```";
+    // MOCK_TRUNCATE=1: the reply stops partway through (like hitting max_tokens).
+    if (process.env.MOCK_TRUNCATE === "1" && json.stream) text = text.slice(0, Math.floor(text.length * 0.6));
     if (log) appendFileSync(log, JSON.stringify({ stream: Boolean(json.stream), image: JSON.stringify(json.messages ?? []).includes('"type":"image"'), cached: JSON.stringify(json.system ?? "").includes("cache_control") }) + "\n");
     if (json.stream && overloads > 0) {
       overloads--;
