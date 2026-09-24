@@ -50,6 +50,7 @@ export const boardActionSchema = {
       items: strArr,
       color,
     }),
+    variant("pointTo", { target: str, match: str, text: str }),
     variant("narrate", { text: str }),
     variant("clear", {}),
   ],

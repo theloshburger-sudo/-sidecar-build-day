@@ -30,6 +30,7 @@ export type BoardActionType =
   | "sketch"
   | "mindmap"
   | "add"
+  | "pointTo"
   | "narrate"
   | "askQuestion"
   | "clear";
