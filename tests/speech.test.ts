@@ -50,3 +50,60 @@ test("a browser voice that errors at once still starts and ends each line exactl
     delete g.SpeechSynthesisUtterance;
   }
 });
+
+test("a device voice that can't speak is skipped: the line is said again with the next voice", async () => {
+  const { speak, browserVoices } = await import("../lib/speech");
+  const g = globalThis as Record<string, unknown>;
+  const spokenWith: string[] = [];
+  g.SpeechSynthesisUtterance = class {
+    text: string;
+    voice: { name: string } | null = null;
+    rate = 1;
+    pitch = 1;
+    onstart: (() => void) | null = null;
+    onend: (() => void) | null = null;
+    onerror: ((e: { error: string }) => void) | null = null;
+    constructor(t: string) {
+      this.text = t;
+    }
+  };
+  const voices = [
+    { name: "Bahh", lang: "en-US" },
+    { name: "Eddy (English (United States))", lang: "en-US" },
+    { name: "Samantha", lang: "en-US" },
+    { name: "Google US English", lang: "en-US" },
+  ];
+  let queue: InstanceType<typeof g.SpeechSynthesisUtterance & (new (t: string) => { voice: { name: string } | null; onstart: (() => void) | null; onend: (() => void) | null; onerror: ((e: { error: string }) => void) | null })>[] = [];
+  g.window = {
+    speechSynthesis: {
+      getVoices: () => voices,
+      cancel() {
+        const q = queue;
+        queue = [];
+        q.forEach((u) => setTimeout(() => u.onerror?.({ error: "canceled" }), 0));
+      },
+      // The top-ranked voice fails; every other voice works.
+      speak(u: (typeof queue)[number]) {
+        queue.push(u);
+        const name = u.voice?.name ?? "";
+        setTimeout(() => {
+          if (name === "Samantha") return u.onerror?.({ error: "synthesis-failed" });
+          spokenWith.push(name);
+          u.onstart?.();
+          setTimeout(() => u.onend?.(), 5);
+        }, 5);
+      },
+    },
+  };
+  try {
+    const list = browserVoices();
+    assert.ok(!list.includes("Bahh") && !list.some((n) => n.startsWith("Eddy")), `joke/robot voices hidden: ${list}`);
+    const events: string[] = [];
+    await new Promise<void>((resolve) => speak("Hello there.", { onStart: () => events.push("start"), onEnd: () => (events.push("end"), resolve()) }));
+    assert.deepEqual(events, ["start", "end"]);
+    assert.deepEqual(spokenWith, ["Google US English"], "said once, with the next voice after Samantha failed");
+  } finally {
+    delete g.window;
+    delete g.SpeechSynthesisUtterance;
+  }
+});

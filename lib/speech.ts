@@ -90,6 +90,8 @@ export function isEcho(heard: string, speaking: string): boolean {
 }
 
 let preferred: SpeechSynthesisVoice | null = null;
+/** Browser voices that failed to speak on this device; skipped from then on. */
+const broken = new Set<string>();
 /** The student's voice pick: a natural voice id (e.g. "george") or "browser:<voice name>". */
 let choice = "";
 
@@ -103,7 +105,7 @@ export function setVoiceChoice(v: string) {
 export function browserVoices(): string[] {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return [];
   const voices = window.speechSynthesis.getVoices().filter((v) => v.lang?.toLowerCase().startsWith("en"));
-  return [...voices].sort((a, b) => voiceScore(b) - voiceScore(a)).filter((v) => voiceScore(v) > -50).slice(0, 8).map((v) => v.name);
+  return [...voices].sort((a, b) => voiceScore(b) - voiceScore(a)).filter((v) => voiceScore(v) > -50 && !broken.has(v.name)).slice(0, 6).map((v) => v.name);
 }
 
 function voiceScore(v: SpeechSynthesisVoice) {
@@ -115,6 +117,10 @@ function voiceScore(v: SpeechSynthesisVoice) {
   if (/ava|aria|jenny|emma|samantha|allison|zoe|serena/.test(n)) s += 10;
   if (/en-us/i.test(v.lang)) s += 5;
   if (/compact|espeak|fred|albert|zarvox|whisper|bad news|bells|boing|bubbles|cellos|jester|organ|trinoids|wobble/.test(n)) s -= 100;
+  // macOS joke voices and the robotic "Eloquence" set: fine for a laugh, wrong for a tutor.
+  if (/\b(bahh|good news|superstar|junior|ralph|kathy|eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley)\b/.test(n)) s -= 100;
+  // Voices that sound natural on each platform.
+  if (/samantha|alex|daniel|karen|moira|tessa|google us english|google uk english/.test(n)) s += 20;
   return s;
 }
 
@@ -123,9 +129,9 @@ function pickVoice(): SpeechSynthesisVoice | null {
   if (preferred) return preferred;
   const voices = window.speechSynthesis.getVoices().filter((v) => v.lang?.toLowerCase().startsWith("en"));
   if (!voices.length) return null;
-  const picked = choice.startsWith("browser:") ? voices.find((v) => v.name === choice.slice(8)) : undefined;
+  const picked = choice.startsWith("browser:") ? voices.find((v) => v.name === choice.slice(8) && !broken.has(v.name)) : undefined;
   if (picked) return (preferred = picked);
-  preferred = [...voices].sort((a, b) => voiceScore(b) - voiceScore(a))[0] ?? null;
+  preferred = [...voices].filter((v) => !broken.has(v.name)).sort((a, b) => voiceScore(b) - voiceScore(a))[0] ?? null;
   return preferred;
 }
 
@@ -217,8 +223,11 @@ export function speak(text: string, opts: SpeakOptions = {}) {
     return;
   }
 
+  let retried = false;
+  let gen = 0; // each attempt (first voice, retry voice) ignores callbacks from the other
   const browserVoice = () => {
     if (my !== token) return;
+    const g = ++gen;
     if (!ttsSupported()) {
       opts.onStart?.(estimateMs(clean, rate));
       setTimeout(() => my === token && opts.onEnd?.(), estimateMs(clean, rate));
@@ -237,7 +246,7 @@ export function speak(text: string, opts: SpeakOptions = {}) {
     // No audible speech (no voices, muted tab, speech error): keep the lesson's rhythm with the
     // estimated duration. Runs at most once, and never after the line already started or ended.
     const silent = () => {
-      if (started || ended || my !== token) return;
+      if (started || ended || my !== token || g !== gen) return;
       started = true;
       opts.onStart?.(estimateMs(clean, rate));
       setTimeout(finish, estimateMs(clean, rate));
@@ -249,13 +258,27 @@ export function speak(text: string, opts: SpeakOptions = {}) {
       u.pitch = 1.02;
       if (i === 0)
         u.onstart = () => {
-          if (my !== token || started) return;
+          if (my !== token || started || g !== gen) return;
           started = true;
           opts.onStart?.(estimateMs(clean, rate));
         };
-      // An error (or an end without a start) before any sound means nothing was heard.
-      u.onerror = () => (started ? i === parts.length - 1 && finish() : silent());
-      if (i === parts.length - 1) u.onend = () => (started ? finish() : silent());
+      // An error (or an end without a start) before any sound means nothing was heard:
+      // skip that voice for good and say the line again with the next-best one.
+      u.onerror = (e?: { error?: string }) => {
+        if (g !== gen) return;
+        if (started) return void (i === parts.length - 1 && finish());
+        const err = e?.error ?? "";
+        if (v && !retried && my === token && err !== "interrupted" && err !== "canceled") {
+          retried = true;
+          broken.add(v.name);
+          preferred = null;
+          gen++; // retire this attempt before cancel() fires its own errors
+          synth.cancel();
+          return browserVoice();
+        }
+        silent();
+      };
+      if (i === parts.length - 1) u.onend = () => g === gen && (started ? finish() : silent());
       synth.speak(u);
     });
     // Some browsers never fire events (muted tab, no voices): don't hold the lesson hostage.
