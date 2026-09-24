@@ -43,10 +43,9 @@ function segLengths(paths: Pt[][]): number[] {
   });
 }
 
-/** Where the pointer's tip lands for a box: just under small targets, in the middle of big ones. */
+/** Where the pointer's tip lands for a box (fallback when no spot was planned): just under it. */
 export function pointerTip(b: { x: number; y: number; w: number; h: number }): Pt {
-  if (b.h > 90) return [b.x + b.w * 0.5, b.y + b.h * 0.5];
-  return [b.x + Math.min(b.w * 0.55, b.w - 4), b.y + b.h + 5];
+  return [b.h > 90 ? b.x + b.w * 0.5 : b.x + Math.min(b.w * 0.55, b.w - 4), b.y + b.h + 5];
 }
 
 function startOf(p: Prim): Pt {
@@ -240,7 +239,7 @@ function Pointer({ p }: { p: PointerState }) {
         <g key={`bubble-${p.key}`} className={`wb-pointer-bubble ${right ? "" : "wb-pointer-bubble--left"}`}>
           <rect x={bx} y={by} width={bw} height={bh} rx={bh / 2} />
           <text x={bx + 11} y={by + bh / 2 + size * 0.36} fontSize={size}>
-            {shown}
+            <TextRuns text={shown} size={size} />
           </text>
         </g>
       )}

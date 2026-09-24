@@ -354,3 +354,18 @@ test("pointing at part of a line never parks the cursor on the rest of that line
     }
   }
 });
+
+test("pointing at a big box keeps the cursor and label off the words inside it", () => {
+  const acts: Parameters<typeof applyActions>[1] = [{ type: "flow", id: "ch", text: "Chain", items: [], zone: "full" }];
+  for (const t of ["Austria attacks Serbia", "Russia mobilizes", "Germany → Russia, France", "Germany invades Belgium", "Britain declares war"]) acts.push({ type: "add", target: "ch", text: t });
+  const { state, prims } = applyActions(emptyBoard(), [...acts, { type: "pointTo", target: "ch.4", match: "", text: "the trigger" }]);
+  const el = state.els["ch.4"] as { lines: { x: number; y: number; size: number; text: string }[] };
+  const words = el.lines.map((l) => ({ x: l.x, y: l.y - l.size * 0.82, w: l.text.length * l.size * 0.5, h: l.size }));
+  const p = prims.find((q) => q.kind === "point") as { spot: { tip: [number, number]; bx: number; by: number; bw: number; bh: number } };
+  const ov = (r: { x: number; y: number; w: number; h: number }, o: typeof r) => Math.min(r.x + r.w, o.x + o.w) - Math.max(r.x, o.x) > 1 && Math.min(r.y + r.h, o.y + o.h) - Math.max(r.y, o.y) > 1;
+  const tip = { x: p.spot.tip[0] - 2, y: p.spot.tip[1] - 2, w: 4, h: 4 };
+  for (const w of words) {
+    assert.ok(!ov(tip, w), "cursor tip sits on the box's words");
+    assert.ok(!ov({ x: p.spot.bx, y: p.spot.by, w: p.spot.bw, h: p.spot.bh }, w), "label covers the box's words");
+  }
+});

@@ -93,9 +93,10 @@ export function pointerSpot(state: BoardState, b: Box, label: string): PointerSp
     }
     return c;
   };
-  const big = b.h > 90;
-  const cx = big ? b.x + b.w / 2 : b.x + Math.min(b.w * 0.55, b.w - 4);
-  const below: Pt = big ? [cx, b.y + b.h / 2] : [cx, b.y + b.h + 5];
+  // Rest on the edge, never in the middle: the ring already shows the whole thing, and the
+  // middle of a big box is where its words are.
+  const cx = b.h > 90 ? b.x + b.w / 2 : b.x + Math.min(b.w * 0.55, b.w - 4);
+  const below: Pt = [cx, b.y + b.h + 5];
   const above: Pt = [cx, b.y - 5];
   const right: Pt = [b.x + b.w + 6, b.y + b.h / 2];
   const cands: PointerSpot[] = [];
