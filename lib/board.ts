@@ -71,12 +71,25 @@ export function pointerSpot(state: BoardState, b: Box, label: string): PointerSp
     if (el.kind === "text" || (el.kind === "block" && el.box.w * el.box.h < 60000)) blockers.push(el.box);
   }
   const isSelf = (o: Box) => o.x <= b.x + 1 && o.y <= b.y + 1 && o.x + o.w >= b.x + b.w - 1 && o.y + o.h >= b.y + b.h - 1;
+  const hit = (r: Box, o: Box, m = 3) =>
+    Math.max(0, Math.min(r.x + r.w, o.x + o.w + m) - Math.max(r.x, o.x - m)) * Math.max(0, Math.min(r.y + r.h, o.y + o.h + m) - Math.max(r.y, o.y - m));
   /** How much of a rectangle is covered by writing (0 = free), with off-board counting as covered. */
   const cost = (r: Box) => {
     let c = r.x < 6 || r.y < 2 || r.x + r.w > BOARD_W - 6 ? 1e6 : 0;
     for (const o of blockers) {
-      if (isSelf(o)) continue; // the thing being pointed at may be touched
-      c += Math.max(0, Math.min(r.x + r.w, o.x + o.w + 3) - Math.max(r.x, o.x - 3)) * Math.max(0, Math.min(r.y + r.h, o.y + o.h + 3) - Math.max(r.y, o.y - 3));
+      if (!isSelf(o)) {
+        c += hit(r, o);
+        continue;
+      }
+      // The thing being pointed at may be touched, but not the rest of its line
+      // (pointing at "+ 7" must not park the cursor on the "=" next to it).
+      const parts: Box[] = [
+        { x: o.x, y: o.y, w: b.x - 2 - o.x, h: o.h },
+        { x: b.x + b.w + 2, y: o.y, w: o.x + o.w - (b.x + b.w + 2), h: o.h },
+        { x: o.x, y: o.y, w: o.w, h: b.y - 2 - o.y },
+        { x: o.x, y: b.y + b.h + 2, w: o.w, h: o.y + o.h - (b.y + b.h + 2) },
+      ];
+      for (const p of parts) if (p.w > 1 && p.h > 1) c += hit(r, p, 0);
     }
     return c;
   };
@@ -220,6 +233,8 @@ type El =
       yMin: number;
       yMax: number;
       label: string;
+      /** What's drawn on it (curves, points), so later turns can point at them by coordinates. */
+      marks?: string[];
     };
 
 export interface Box {
@@ -368,6 +383,19 @@ export function findLoose(hay: string, needle: string): [number, number] | null 
   const at = flat.indexOf(n);
   if (at < 0) return null;
   return [map[at], map[at + n.length - 1] + 1];
+}
+
+function boxInside(a: Box, b: Box, slack = 4): boolean {
+  return a.x >= b.x - slack && a.y >= b.y - slack && a.x + a.w <= b.x + b.w + slack && a.y + a.h <= b.y + b.h + slack;
+}
+
+/** Trim a label to `max` characters at a word break, with an ellipsis (never mid-word). */
+export function shortLabel(text: string | undefined, max: number): string {
+  const t = (text ?? "").replace(/\s+/g, " ").trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max - 1);
+  const sp = t[max - 1] === " " ? cut.length : cut.lastIndexOf(" ");
+  return `${(sp > max * 0.4 ? cut.slice(0, sp) : cut).replace(/[\s,;:.–—-]+$/, "")}…`;
 }
 
 function colorOf(c: InkColor | undefined, fallback: InkColor): string {
@@ -566,6 +594,11 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
     const el = (target && s.els[target]) || (s.lastGraph ? s.els[s.lastGraph] : undefined);
     return el && el.kind === "graph" ? el : null;
   };
+  const noteOnGraph = (target: string | undefined, mark: string) => {
+    const id = target && s.els[target]?.kind === "graph" ? target : s.lastGraph;
+    const g = id ? s.els[id] : undefined;
+    if (id && g?.kind === "graph") s.els[id] = { ...g, marks: [...(g.marks ?? []), mark].slice(-8) };
+  };
   const toPx = (g: Extract<El, { kind: "graph" }>, x: number, y: number): Pt => [
     g.plot.x + ((x - g.xMin) / (g.xMax - g.xMin)) * g.plot.w,
     g.plot.y + g.plot.h - ((y - g.yMin) / (g.yMax - g.yMin)) * g.plot.h,
@@ -748,9 +781,27 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
           // A spot on a graph, in graph coordinates ("8,6" = where the curves cross).
           const [px, py] = toPx(g, Number(xy[1]), Number(xy[2]));
           if (Number.isFinite(px) && Number.isFinite(py)) hit = { box: { x: px - 9, y: py - 9, w: 18, h: 18 } };
-        } else hit = locate(a.target, a.match);
+        } else if (g) {
+          // Trust the named target: if the exact bit isn't in it, point at the whole thing rather
+          // than at a look-alike somewhere else on the board (e.g. match "E" landing in "Demand").
+          if (a.match) {
+            // Only text and boxes hold words directly; diagrams, tables and canvases hold them in pieces.
+            const own = g.kind === "text" || g.kind === "block" ? locate(a.target, a.match) : null;
+            if (own && boxInside(own.box, g.box)) hit = own;
+            // Flows, timelines, tables and T-accounts keep their words in pieces ("ch.2", "pre.dr1").
+            for (let i = 0; !hit && i < s.order.length; i++) {
+              const id = s.order[i];
+              if (!id.startsWith(`${a.target}.`)) continue;
+              const piece = locate(id, a.match);
+              if (piece && boxInside(piece.box, s.els[id].box)) hit = piece;
+            }
+          }
+          hit ??= { box: g.box };
+        } else if ((a.match ?? "").replace(/\s/g, "").length >= 2) {
+          hit = locate(undefined, a.match); // unknown id: find the words themselves
+        }
         if (!hit) break;
-        const label = (text || "").slice(0, 28);
+        const label = shortLabel(text, 28);
         const spot = pointerSpot(s, hit.box, label);
         prims.push({ kind: "point", key: key(), x: hit.box.x, y: hit.box.y, w: hit.box.w, h: hit.box.h, label, dur: 900, spot });
         break;
@@ -1042,6 +1093,7 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
         }
         if (!segs.length) break;
         addPath(segs, color, 3.4);
+        noteOnGraph(a.target, `curve ${text ? `"${text.slice(0, 20)}" ` : ""}${a.fn ? `y = ${a.fn.slice(0, 30)}` : "(data)"}`);
         if (text) {
           const last = segs[segs.length - 1][segs[segs.length - 1].length - 1];
           placeLabel(text, [Math.min(last[0], g.box.x + g.box.w - 10), Math.max(g.plot.y + 14, Math.min(last[1], g.plot.y + g.plot.h - 6))], color, g.box, true);
@@ -1064,6 +1116,7 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
         addPath([dot], color, 3, { fill: color, dur: 200 });
         s.labels.push({ x: p[0] - 7, y: p[1] - 7, w: 14, h: 14 });
         placeLabel(text || `(${fmt(a.x!)}, ${fmt(a.y!)})`, p, color, g.box);
+        noteOnGraph(a.target, `point ${text ? `"${text.slice(0, 20)}" ` : ""}at ${fmt(a.x!)},${fmt(a.y!)}`);
         break;
       }
 
@@ -1534,7 +1587,8 @@ export function describeBoard(s: BoardState): string {
     if (!el) continue;
     if (id.includes(".") && !/\.title$/.test(id)) continue; // children are implied by their parent
     if (el.kind === "text") lines.push(`- ${id}: "${el.text.slice(0, 80)}"`);
-    else if (el.kind === "graph") lines.push(`- ${id}: ${el.label}`);
+    else if (el.kind === "graph")
+      lines.push(`- ${id}: ${el.label}${el.marks?.length ? `; ${el.marks.join("; ")}. Point at a spot with match "x,y"` : ""}`);
     else if (el.kind === "canvas")
       lines.push(`- ${id}: drawing area "${el.label}" (100×100, x right, y down); ${el.shapes.length ? el.shapes.map((sh, i) => `${i + 1} ${sh}`).join(", ") : "empty"}`);
     else if (el.kind === "diagram")
@@ -1545,7 +1599,16 @@ export function describeBoard(s: BoardState): string {
       lines.push(
         `- ${id}: number line ${fmt(el.lo)}..${fmt(el.hi)}; rows ${el.rows.map((r, i) => `${i + 1} = ${r}`).join(", ") || "(none yet)"}; ${el.slots - el.rows.length} free row(s). Endpoints: ${id}.<row>.lo / .hi, bars: ${id}.<row>.bar`,
       );
-    else lines.push(`- ${id}: ${el.label}`);
+    else if (el.kind === "block" && el.children.length) {
+      // Boxes, timelines, tables and T-accounts: name the pieces so they can be circled or pointed at.
+      const kids = el.children
+        .filter((c) => !/\.title$/.test(c))
+        .map((c) => {
+          const k = s.els[c];
+          return k?.kind === "text" ? `${c} "${k.text.slice(0, 30)}"` : c;
+        });
+      lines.push(`- ${id}: ${el.label}${kids.length ? `; pieces: ${kids.slice(0, 10).join(", ")}${kids.length > 10 ? ", …" : ""}` : ""}`);
+    } else lines.push(`- ${id}: ${el.label}`);
   }
   const used = Math.max(s.cursor.left, s.cursor.right);
   lines.push(`(board filled down to y=${Math.round(used)}; it scrolls, but use "clear" before a new idea if y > 900)`);
