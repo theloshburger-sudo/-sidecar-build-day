@@ -70,8 +70,21 @@ export function friendlyError(err: unknown): { status: number; message: string }
     if (err.status && err.status >= 500) return { status: 503, message: "The AI service is having a moment. Try again, or switch to demo mode." };
   }
   const msg = err instanceof Error ? err.message : String(err);
+  // Errors inside a stream (e.g. overloaded mid-answer) arrive with no HTTP status, only a type.
+  const type = err instanceof Anthropic.APIError ? String((err as { type?: unknown }).type ?? "") || /"type":"(\w+)"/.exec(msg)?.[1] || "" : "";
+  if (/overloaded/i.test(type + msg)) return { status: 503, message: "Claude is overloaded for a moment. Try again in a few seconds." };
   if (/timeout|timed out/i.test(msg)) return { status: 504, message: "Teacher took too long to answer. Try again." };
-  return { status: 500, message: "Something went wrong talking to the AI. Try again." };
+  const detail = (type || msg).replace(/\s+/g, " ").slice(0, 120);
+  return { status: 500, message: `Something went wrong talking to the AI${detail ? ` (${detail})` : ""}. Try again.` };
+}
+
+/** Worth trying again: overloaded, rate-limited, server-side or connection trouble (not bad requests or bad keys). */
+export function retryable(err: unknown): boolean {
+  if (err instanceof Anthropic.APIError) {
+    if (err.status === undefined) return true; // mid-stream error event (overloaded_error, api_error) or dropped connection
+    return err.status === 429 || err.status >= 500;
+  }
+  return true;
 }
 
 // ---- very small in-memory rate limiter (per server instance) ----

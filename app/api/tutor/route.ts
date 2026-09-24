@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
-import { MODEL, createJSON, friendlyError, getClient, hasKey, rateLimited } from "@/lib/server/claude";
+import { MODEL, createJSON, friendlyError, getClient, hasKey, rateLimited, retryable } from "@/lib/server/claude";
 import { TUTOR_SYSTEM, toMessages } from "@/lib/prompt";
 import { tutorTurnSchema } from "@/lib/schema";
 import { STREAM_ERROR } from "@/lib/stream-parse";
@@ -96,12 +96,25 @@ export async function POST(req: Request) {
       };
       try {
         const wantThinking = process.env.ANTHROPIC_THINKING === "on" || haiku;
-        try {
-          await run(!wantThinking);
-        } catch (err) {
-          // Some models don't allow turning thinking off: retry once with it on.
-          if (!sent && !wantThinking && err instanceof Anthropic.APIError && err.status === 400 && /thinking/i.test(err.message)) await run(false);
-          else throw err;
+        let thinkingOff = !wantThinking;
+        for (let attempt = 1; ; attempt++) {
+          try {
+            await run(thinkingOff);
+            break;
+          } catch (err) {
+            console.error("tutor attempt failed", { attempt, sent, status: (err as { status?: unknown }).status, type: (err as { type?: unknown }).type, message: String((err as Error)?.message ?? err).slice(0, 300) });
+            // Some models don't allow turning thinking off: retry once with it on.
+            if (!sent && thinkingOff && err instanceof Anthropic.APIError && err.status === 400 && /thinking/i.test(err.message)) {
+              thinkingOff = false;
+              continue;
+            }
+            // Overloaded / dropped before Teacher said anything: quietly try again (up to 3 tries).
+            if (!sent && attempt < 3 && retryable(err)) {
+              await new Promise((r) => setTimeout(r, 700 * attempt));
+              continue;
+            }
+            throw err;
+          }
         }
       } catch (err) {
         const schemaProblem =
