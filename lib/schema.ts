@@ -59,9 +59,13 @@ export const boardActionSchema = {
 export const tutorTurnSchema = {
   type: "object",
   additionalProperties: false,
-  // board comes first so it streams first: Teacher starts talking and drawing while the rest arrives.
-  required: ["board", "say", "phase", "question", "choices", "gap", "plan", "step", "videos", "practice", "verdict", "insight"],
+  // Grade FIRST (assess + verdict are a few words), then board streams so Teacher starts talking and
+  // drawing while the rest arrives. With board first, Teacher had already said "Nice work!" before
+  // it had checked the student's answer.
+  required: ["assess", "verdict", "board", "say", "phase", "question", "choices", "gap", "plan", "step", "videos", "practice", "insight"],
   properties: {
+    assess: str,
+    verdict: { type: "string", enum: ["none", "correct", "partial", "incorrect"] },
     board: { type: "array", items: boardActionSchema },
     say: str,
     phase: { type: "string", enum: ["diagnose", "teach", "check", "practice", "wrapup"] },
@@ -80,7 +84,6 @@ export const tutorTurnSchema = {
       },
     },
     practice: str,
-    verdict: { type: "string", enum: ["none", "correct", "partial", "incorrect"] },
     insight: str,
   },
 } as const;

@@ -8,7 +8,8 @@ import VideoCards from "./VideoCards";
 import MathText from "./MathText";
 import { RECAPS_KEY, loadRecaps } from "./Home";
 import type { AppStatus, Engine } from "./SidecarApp";
-import { applyActions, boardHeight, describeBoard, emptyBoard, BOARD_MIN_H, type BoardState, type Measure } from "@/lib/board";
+import { applyActions, boardHeight, describeBoard, emptyBoard, BOARD_MIN_H, type BoardState, type Measure, type Prim } from "@/lib/board";
+import { cueFractions } from "@/lib/cue";
 import { getDemo } from "@/lib/demo";
 import { demoReply, demoStart, type DemoState } from "@/lib/demo-engine";
 import { browserVoices, createRecognizer, isEcho, prefetchVoice, setVoiceChoice, speak, speakAsync, speechRecognitionSupported, stopSpeaking, ttsSupported, unlockAudio, onVoiceProblem, naturalVoiceWorking, onNaturalVoiceChange } from "@/lib/speech";
@@ -185,15 +186,51 @@ export default function Session({
   // ---------------------------------------------------------------- teaching a turn, beat by beat
   /** Draw one beat's actions; resolves when the drawing (and its spoken line) are both finished. */
   const playBeat = useCallback(async (beat: Beat, alive: () => boolean, n: number) => {
-    const res = applyActions(board.current, beat.actions, measure.current ?? undefined);
-    board.current = res.state;
-    setBoardH(boardHeight(res.state));
+    // Lay out each action separately so each one can be timed to the words that describe it.
+    const groups: Prim[][] = [];
+    let st = board.current;
+    for (const a of beat.actions) {
+      const r = applyActions(st, [a], measure.current ?? undefined);
+      st = r.state;
+      groups.push(r.prims);
+    }
+    const lookup = (id: string) => {
+      const el = board.current.els[id];
+      return el ? ("text" in el && typeof el.text === "string" ? el.text : el.label) : undefined;
+    };
+    const cues = cueFractions(beat.text, beat.actions, lookup);
+    board.current = st;
+    setBoardH(boardHeight(st));
+    const all = groups.flat();
     // Tag this beat's strokes so they glow while the line is spoken: that highlight (and the pointer) shows what the words are about.
     const uid = ++beatUid.current;
-    for (const p of res.prims) if (p.kind !== "clear") p.beat = uid;
+    for (const p of all) if (p.kind !== "clear") p.beat = uid;
     setFocusBeat(uid);
     const p = prefsRef.current;
-    const auto = !p.speed;
+    const spd = p.speed || 1;
+    /**
+     * The beat's strokes with pauses in between, so each action starts just before its words are
+     * spoken (a circle as "plus 7" is said, the pointer landing on "22" as it's named), like a
+     * teacher's hand following their voice. Actions the line never names are spread through it.
+     */
+    const timed = (speechMs: number): Prim[] => {
+      const out: Prim[] = [];
+      let clock = 0;
+      groups.forEach((g, i) => {
+        if (!g.length) return;
+        const isPoint = g.some((q) => q.kind === "point");
+        const lead = isPoint ? 750 : 250; // the pointer needs time to fly there
+        const want = Math.max(0, cues[i] * speechMs - lead);
+        const wait = want - clock;
+        if (wait > 120) {
+          out.push({ kind: "wait", key: `w${uid}-${i}`, dur: wait, beat: uid });
+          clock += wait;
+        }
+        out.push(...g);
+        clock += g.reduce((acc, q) => acc + (q.kind === "point" ? 1400 : q.kind === "clear" ? q.dur : (q.dur + 150) / spd), 0);
+      });
+      return out;
+    };
     if (p.voice && beat.text) {
       let drawn = false;
       const speech = speakAsync(beat.text, {
@@ -204,18 +241,18 @@ export default function Session({
           if (!alive() || drawn) return;
           drawn = true;
           setSpeaking(true);
-          wb.current?.enqueue(res.prims, auto ? ms * 0.9 : undefined);
+          wb.current?.enqueue(timed(ms));
         },
       });
       await speech;
       if (!drawn) {
         drawn = true;
-        wb.current?.enqueue(res.prims);
+        wb.current?.enqueue(all);
       }
       setSpeaking(false);
       await wb.current?.whenIdle();
     } else {
-      wb.current?.enqueue(res.prims);
+      wb.current?.enqueue(all);
       await wb.current?.whenIdle();
       // Give the reader a moment on beats that are mostly talk.
       if (beat.text && alive()) await new Promise((r) => setTimeout(r, Math.min(700, 120 + beat.text.split(" ").length * 25)));
