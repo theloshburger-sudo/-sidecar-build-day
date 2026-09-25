@@ -445,3 +445,15 @@ test("a circle paired with the wrong sentence moves to the sentence that names i
   shiftMarks(b3, b4);
   assert.equal(b3.actions.length, 1);
 });
+
+test("a pointer the line never goes with is skipped; one it names or points to with words stays", async () => {
+  const { pointerFits, cueFractions } = await import("../lib/cue");
+  const plus7 = { type: "pointTo", target: "eq1", match: "+ 7", text: "first target" } as never;
+  // The live case: nothing in the line is about the 7.
+  assert.equal(pointerFits("We want to get x alone on one side.", plus7), false);
+  assert.equal(pointerFits("The plus 7 was added last.", plus7), true);
+  assert.equal(pointerFits("The plus seven was added last.", plus7), true, "number words count");
+  assert.equal(pointerFits("Look at this part of the equation.", plus7), true, "pointing words count");
+  const [c] = cueFractions("Adding seven was the last step, so it comes off first.", [plus7]);
+  assert.ok(c < 0.3, `lands on "seven" (${c})`);
+});

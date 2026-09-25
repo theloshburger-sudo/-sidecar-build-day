@@ -3,10 +3,13 @@
 import type { BoardAction } from "./types";
 import { speakable } from "./speech";
 
+const NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty"];
 const norm = (t: string) =>
   speakable(t)
     .toLowerCase()
     .replace(/[^a-z0-9$.%]+/g, " ")
+    // "plus seven" and "+ 7" are the same thing
+    .replace(/\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\b/g, (w) => String(NUMBER_WORDS.indexOf(w)))
     .replace(/\s+/g, " ")
     .trim();
 
@@ -97,6 +100,17 @@ export function mentions(line: string, a: BoardAction, lookup: (id: string) => s
   const said = norm(line);
   // Only a real mention counts here ("this"/"that" alone doesn't name anything).
   return !!said && locate(said, a, 0, lookup, a.type !== "pointTo") != null;
+}
+
+/**
+ * Does the line go with this pointer at all: naming what it points at, or pointing with words
+ * ("look", "this", "here")? A pointer with neither lands on something the voice never mentions,
+ * which is confusing ("We want x alone." while it rings the "+ 7"), so it's skipped. Like Clicky,
+ * only point when the pointing goes with what's being said.
+ */
+export function pointerFits(line: string, a: BoardAction, lookup: (id: string) => string | undefined = () => undefined): boolean {
+  const said = norm(line);
+  return !!said && locate(said, a, 0, lookup, true) != null;
 }
 
 /**

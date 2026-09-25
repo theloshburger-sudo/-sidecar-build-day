@@ -9,7 +9,7 @@ import MathText from "./MathText";
 import { RECAPS_KEY, loadRecaps } from "./Home";
 import type { AppStatus, Engine } from "./SidecarApp";
 import { applyActions, boardHeight, describeBoard, emptyBoard, BOARD_MIN_H, type BoardState, type Measure, type Prim } from "@/lib/board";
-import { cueFractions, shiftMarks } from "@/lib/cue";
+import { cueFractions, pointerFits, shiftMarks } from "@/lib/cue";
 import { getDemo } from "@/lib/demo";
 import { demoReply, demoStart, type DemoState } from "@/lib/demo-engine";
 import { browserVoices, createRecognizer, isEcho, prefetchVoice, setVoiceChoice, speak, speakAsync, speechRecognitionSupported, stopSpeaking, ttsSupported, unlockAudio, onVoiceProblem, naturalVoiceWorking, onNaturalVoiceChange } from "@/lib/speech";
@@ -300,6 +300,10 @@ export default function Session({
           if (natural() && beats[i + 1]?.text) prefetchVoice(beats[i + 1].text);
           // A circle/pointer whose words are in the NEXT line waits for that line.
           if (beats[i + 1]) shiftMarks(beats[i], beats[i + 1], boardLookup);
+          // A pointer the spoken line doesn't go with at all is skipped (it would point at something never mentioned).
+          const b = beats[i];
+          const fitting = b.actions.filter((a) => a.type !== "pointTo" || !b.text || pointerFits(b.text, a, boardLookup));
+          if (fitting.length !== b.actions.length) b.actions.splice(0, b.actions.length, ...fitting);
           await playBeat(beats[i], alive, i + 1);
           continue;
         }

@@ -137,7 +137,7 @@ const algebra: DemoAssignment = {
           { type: "balance", target: "eq3", text: "÷ 3" },
           { type: "narrate", text: "The 3s on the left cancel, leaving x alone." },
           { type: "write", id: "eq4", text: "x = ?", size: "lg" },
-          { type: "narrate", text: "You finish the right side: what's 15 split three ways?" },
+          { type: "narrate", text: "Your turn: finish the right side. What's 15 split three ways?" },
           { type: "pointTo", target: "eq4", match: "?", text: "your turn" },
         ],
         question: "So what is x?",
