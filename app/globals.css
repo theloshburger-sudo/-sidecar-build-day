@@ -1551,3 +1551,7 @@ sub { top: 0.25em; }
 @keyframes ptrRingIn { from { transform: scale(1.25); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes ptrRingPulse { 50% { stroke-opacity: 0.45; fill-opacity: 0.4; } }
 @media (prefers-reduced-motion: reduce) { .wb-pointer-ring, .wb-pointer-bubble, .wb-pointer-bubble rect { animation: none; } .wb-pointer-follow { transition: none; } }
+
+.new-problem { display: inline-flex; align-items: center; gap: 6px; flex: 1 1 360px; min-width: 0; max-width: 560px; }
+.new-problem input { flex: 1; min-width: 0; border: 1px solid var(--primary); border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 13.5px; box-shadow: 0 0 0 3px var(--primary-soft); }
+.new-problem input:focus { outline: none; }
