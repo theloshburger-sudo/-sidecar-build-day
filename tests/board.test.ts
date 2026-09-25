@@ -457,3 +457,14 @@ test("a pointer the line never goes with is skipped; one it names or points to w
   const [c] = cueFractions("Adding seven was the last step, so it comes off first.", [plus7]);
   assert.ok(c < 0.3, `lands on "seven" (${c})`);
 });
+
+test("clock: labels land on their words, whole words only, and the label the pointer rings appears as it's pointed at", async () => {
+  const { cueFractions } = await import("../lib/cue");
+  const [arc, label, ptr] = cueFractions("Multiplying by i turns you a quarter turn, so i to the first lands at 3 o'clock: that's i.", [
+    { type: "sketch", kind: "arc", text: "×i" },
+    { type: "sketch", id: "p1", kind: "text", text: "i" },
+    { type: "pointTo", target: "p1", text: "i¹ = i" },
+  ] as never);
+  assert.ok(arc > 0.2 && arc < 0.45, `arc on "quarter turn" (${arc})`);
+  assert.ok(label > 0.8 && ptr > 0.8 && label <= ptr, `label + pointer on "that's i" (${label}, ${ptr})`);
+});

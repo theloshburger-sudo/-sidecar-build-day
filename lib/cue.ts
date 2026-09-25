@@ -52,6 +52,9 @@ function phrasesFor(a: BoardAction, lookup: (id: string) => string | undefined):
     box: ["box"],
   };
   (noun[a.type] ?? []).forEach(add);
+  // A curved arrow on a drawing is a turn ("a quarter turn", "go around").
+  if (a.type === "sketch" && a.kind === "arc") ["quarter turn", "turn", "around", "rotate", "spin"].forEach(add);
+  if (a.type === "sketch" && a.kind === "dot") ["where", "lands", "land"].forEach(add);
   return out;
 }
 
@@ -76,8 +79,11 @@ function locate(said: string, a: BoardAction, from: number, lookup: (id: string)
   for (const phrase of phrasesFor(a, lookup)) {
     const p = norm(phrase);
     if (!p) continue;
-    const whole = said.indexOf(p, start);
-    if (whole >= 0) return whole;
+    // Whole words only: the label "i" must not match the i inside "multiplying".
+    const whole = new RegExp(`(^| )${p.replace(/[.$%*+?^()[\]{}|\\]/g, "\\$&")}( |$)`, "g");
+    whole.lastIndex = start;
+    const hit = whole.exec(said);
+    if (hit) return hit.index + hit[1].length;
     // Otherwise the most telling word of it (numbers and long words first).
     const words = p.split(" ").filter((w) => w.length > 1 && !STOP.has(w)).sort((x, y) => Number(/\d/.test(y)) - Number(/\d/.test(x)) || y.length - x.length);
     for (const w of words) {
@@ -167,6 +173,12 @@ export function cueFractions(line: string, actions: BoardAction[], lookup: (id: 
     }
     i = j - 1;
   }
+  // A label the pointer then lands on appears just as it's pointed at ("…that's i"), not at an earlier mention.
+  actions.forEach((a, k) => {
+    if (a.type !== "pointTo" || !a.target) return;
+    const made = actions.findIndex((b, m) => m < k && b.id === a.target);
+    if (made >= 0) out[made] = Math.max(out[made] as number, (out[k] as number) - 0.03);
+  });
   let prev = 0;
   return out.map((f) => (prev = Math.max(prev, Math.min(1, f as number))));
 }
