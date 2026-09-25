@@ -1,7 +1,6 @@
 /** Natural voices Teacher can speak with (ElevenLabs default voices). The server only accepts these ids. */
 export const NATURAL_VOICES = [
   { id: "george", label: "George · warm", eleven: "JBFqnCBsd6RMkjVDRZzb" },
-  { id: "sarah", label: "Sarah · calm", eleven: "EXAVITQu4vr4xnAE8QD9" },
   { id: "brian", label: "Brian · deep", eleven: "nPczCjzI2devNBz1zQrb" },
   { id: "jessica", label: "Jessica · upbeat", eleven: "cgSgspJ2msm6clMCkdW9" },
   { id: "charlie", label: "Charlie · casual", eleven: "IKne3meq5aSn9XLyUdCD" },
