@@ -9,7 +9,7 @@ import MathText from "./MathText";
 import { RECAPS_KEY, loadRecaps } from "./Home";
 import type { AppStatus, Engine } from "./SidecarApp";
 import { applyActions, boardHeight, describeBoard, emptyBoard, BOARD_MIN_H, type BoardState, type Measure, type Prim } from "@/lib/board";
-import { cueFractions } from "@/lib/cue";
+import { cueFractions, shiftMarks } from "@/lib/cue";
 import { getDemo } from "@/lib/demo";
 import { demoReply, demoStart, type DemoState } from "@/lib/demo-engine";
 import { browserVoices, createRecognizer, isEcho, prefetchVoice, setVoiceChoice, speak, speakAsync, speechRecognitionSupported, stopSpeaking, ttsSupported, unlockAudio, onVoiceProblem, naturalVoiceWorking, onNaturalVoiceChange } from "@/lib/speech";
@@ -185,6 +185,11 @@ export default function Session({
 
   // ---------------------------------------------------------------- teaching a turn, beat by beat
   /** Draw one beat's actions; resolves when the drawing (and its spoken line) are both finished. */
+  /** The words of a board element, so a line saying "the plus 7" can be matched to a mark on it. */
+  const boardLookup = (id: string) => {
+    const el = board.current.els[id];
+    return el ? ("text" in el && typeof el.text === "string" ? el.text : el.label) : undefined;
+  };
   const playBeat = useCallback(async (beat: Beat, alive: () => boolean, n: number) => {
     // Lay out each action separately so each one can be timed to the words that describe it.
     const groups: Prim[][] = [];
@@ -194,11 +199,7 @@ export default function Session({
       st = r.state;
       groups.push(r.prims);
     }
-    const lookup = (id: string) => {
-      const el = board.current.els[id];
-      return el ? ("text" in el && typeof el.text === "string" ? el.text : el.label) : undefined;
-    };
-    const cues = cueFractions(beat.text, beat.actions, lookup);
+    const cues = cueFractions(beat.text, beat.actions, boardLookup);
     board.current = st;
     setBoardH(boardHeight(st));
     const all = groups.flat();
@@ -287,6 +288,8 @@ export default function Session({
           const i = next++;
           setActiveBeat(i);
           if (natural() && beats[i + 1]?.text) prefetchVoice(beats[i + 1].text);
+          // A circle/pointer whose words are in the NEXT line waits for that line.
+          if (beats[i + 1]) shiftMarks(beats[i], beats[i + 1], boardLookup);
           await playBeat(beats[i], alive, i + 1);
           continue;
         }

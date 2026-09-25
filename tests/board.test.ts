@@ -425,3 +425,23 @@ test("cues: each action is timed to where its words are spoken", async () => {
   const spread = cueFractions("Here we go.", [{ type: "write", text: "zzz" }, { type: "write", text: "qqq" }, { type: "write", text: "vvv" }] as never);
   assert.ok(spread[0] === 0 && spread[1] > 0 && spread[2] > spread[1], "unmentioned actions are spread through the line");
 });
+
+test("a circle paired with the wrong sentence moves to the sentence that names it", async () => {
+  const { shiftMarks, cueFractions } = await import("../lib/cue");
+  // What happened live: the circle came with "get x alone", before the line that explains it.
+  const b1 = { text: "We want to get x alone on one side.", actions: [{ type: "circle", target: "eq1", match: "+ 7", text: "undo this first" }] } as never as { text: string; actions: import("../lib/types").BoardAction[] };
+  const b2 = { text: "The plus 7 was added last, so it's the first thing we undo.", actions: [] as import("../lib/types").BoardAction[] };
+  shiftMarks(b1, b2);
+  assert.equal(b1.actions.length, 0);
+  assert.equal(b2.actions.length, 1);
+  const [c] = cueFractions(b2.text, b2.actions);
+  assert.ok(c > 0.05 && c < 0.3, `lands on "plus 7" (${c})`);
+  // A mark nobody names goes at the end of its line, never the start.
+  const [late] = cueFractions("We want to get x alone on one side.", [{ type: "circle", target: "eq1", match: "+ 7" }] as never);
+  assert.ok(late >= 0.8, `unexplained circle waits (${late})`);
+  // Content that IS explained by its own line stays put.
+  const b3 = { text: "I circle the 3x because it's the inner layer.", actions: [{ type: "circle", match: "3x" }] } as never as typeof b2;
+  const b4 = { text: "Now the 3x is alone.", actions: [] as import("../lib/types").BoardAction[] };
+  shiftMarks(b3, b4);
+  assert.equal(b3.actions.length, 1);
+});
