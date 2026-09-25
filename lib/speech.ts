@@ -229,6 +229,24 @@ let voiceProblemShown = false;
 export function onVoiceProblem(fn: ((msg: string) => void) | null) {
   voiceProblemHandler = fn;
 }
+/**
+ * Account-level trouble (out of credits, key rejected, free tier blocked): every clip would fail
+ * the same way, so stop asking for the rest of the visit and use the device voice.
+ */
+let naturalDown = false;
+const naturalListeners = new Set<(ok: boolean) => void>();
+export function naturalVoiceWorking(): boolean {
+  return !naturalDown;
+}
+export function onNaturalVoiceChange(fn: (ok: boolean) => void): () => void {
+  naturalListeners.add(fn);
+  return () => naturalListeners.delete(fn);
+}
+function markNaturalDown() {
+  if (naturalDown) return;
+  naturalDown = true;
+  naturalListeners.forEach((fn) => fn(false));
+}
 function reportVoiceProblem(msg: string) {
   if (voiceProblemShown || !voiceProblemHandler) return;
   voiceProblemShown = true;
@@ -261,7 +279,7 @@ function ttsSlot(urgent = false): Promise<() => void> {
 /** Fetch (and cache) natural-voice audio, so the next beat is ready before the current one ends. */
 function fetchTTS(text: string, urgent = false, voiceId?: string): Promise<Blob | null> {
   const clean = speakable(text);
-  if (!clean) return Promise.resolve(null);
+  if (!clean || naturalDown) return Promise.resolve(null);
   const voice = voiceId ?? (choice.startsWith("browser:") ? "" : choice);
   const cacheKey = `${voice}|${clean}`;
   const hit = ttsCache.get(cacheKey);
@@ -275,6 +293,7 @@ function fetchTTS(text: string, urgent = false, voiceId?: string): Promise<Blob 
         if (r.ok) return r.blob();
         // Tell the page once why the natural voice isn't working (it falls back to the device voice).
         const j = (await r.json().catch(() => ({}))) as { status?: number; detail?: string; error?: string };
+        if ((j.status && [401, 402, 403].includes(j.status)) || /quota|credits|unusual activity|free tier|invalid api key/i.test(j.detail ?? "")) markNaturalDown();
         reportVoiceProblem(`${j.status ? `ElevenLabs ${j.status}` : `Voice server ${r.status}`}${j.detail ? `: ${j.detail}` : j.error ? `: ${j.error}` : ""}`);
         return null;
       })

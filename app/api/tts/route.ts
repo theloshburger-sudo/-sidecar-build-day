@@ -37,6 +37,11 @@ async function callWithRetry(key: string, voice: string, text: string) {
 export async function GET(req: Request) {
   const key = process.env.ELEVENLABS_API_KEY?.trim();
   if (!key) return Response.json({ ok: false, problem: "ELEVENLABS_API_KEY is not set on this deployment" });
+  // The site is public: a live check spends credits and shows account details, so it needs a token.
+  const token = process.env.TTS_CHECK_TOKEN?.trim();
+  if (!token || new URL(req.url).searchParams.get("token") !== token) {
+    return Response.json({ configured: true, note: "Voice check is private. Set TTS_CHECK_TOKEN and open /api/tts?token=<it>." });
+  }
   if (rateLimited(req, 6, undefined, "tts-check")) return Response.json({ error: "rate_limited" }, { status: 429 });
   const voices = [];
   for (const v of NATURAL_VOICES) {

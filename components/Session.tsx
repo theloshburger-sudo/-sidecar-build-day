@@ -11,7 +11,7 @@ import type { AppStatus, Engine } from "./SidecarApp";
 import { applyActions, boardHeight, describeBoard, emptyBoard, BOARD_MIN_H, type BoardState, type Measure } from "@/lib/board";
 import { getDemo } from "@/lib/demo";
 import { demoReply, demoStart, type DemoState } from "@/lib/demo-engine";
-import { browserVoices, createRecognizer, isEcho, prefetchVoice, setVoiceChoice, speak, speakAsync, speechRecognitionSupported, stopSpeaking, ttsSupported, unlockAudio, warmVoices, onVoiceProblem } from "@/lib/speech";
+import { browserVoices, createRecognizer, isEcho, prefetchVoice, setVoiceChoice, speak, speakAsync, speechRecognitionSupported, stopSpeaking, ttsSupported, unlockAudio, onVoiceProblem, naturalVoiceWorking, onNaturalVoiceChange } from "@/lib/speech";
 import { DEFAULT_VOICE, NATURAL_VOICES } from "@/lib/voices";
 import { BeatBuilder, beatsFromTurn, type Beat } from "@/lib/narration";
 import { BoardStreamParser, STREAM_ERROR } from "@/lib/stream-parse";
@@ -133,7 +133,10 @@ export default function Session({
   const player = useRef<{ push(a: BoardAction): void; end(turn: TutorTurn): void; flush(): void } | null>(null);
   statusRef.current = status;
   const [browserList, setBrowserList] = useState<string[]>([]);
-  const naturalOn = Boolean(status?.voice);
+  // Natural voices only while the voice service actually works (not out of credits / blocked).
+  const [naturalOk, setNaturalOk] = useState(naturalVoiceWorking);
+  useEffect(() => onNaturalVoiceChange(setNaturalOk), []);
+  const naturalOn = Boolean(status?.voice) && naturalOk;
   const saved = prefs.voiceName || "";
   // Natural voices on: only those count (an old device-voice pick falls back to the default).
   const voiceName = naturalOn
@@ -148,7 +151,7 @@ export default function Session({
     return () => window.speechSynthesis.removeEventListener("voiceschanged", load);
   }, []);
   useEffect(() => {
-    onVoiceProblem((msg) => setNotice(`🔇 Natural voice unavailable, using this device's voice. ${msg}`));
+    onVoiceProblem((msg) => setNotice(`🔇 Natural voice unavailable, so Teacher is using this device's voice. ${msg}`));
     return () => onVoiceProblem(null);
   }, []);
   const pickVoice = (v: string) => {
@@ -161,11 +164,8 @@ export default function Session({
     if (busyRef.current || speakingRef.current) setNotice(`🗣️ ${name} will speak from Teacher's next line.`);
     else speak(PREVIEW_LINE, { natural: naturalOn, rate: prefs.voiceSpeed || 1 });
   };
-  // Opening the picker fetches every voice's preview, so picking one plays instantly.
-  const warmPreviews = () => {
-    unlockAudio();
-    if (naturalOn) warmVoices(PREVIEW_LINE, NATURAL_VOICES.map((v) => v.id));
-  };
+  // Opening the picker only unlocks audio. (Fetching six previews per visitor burned voice credits on a public site.)
+  const warmPreviews = () => unlockAudio();
 
   const lastTutor = useMemo(() => {
     for (let i = history.length - 1; i >= 0; i--) {
