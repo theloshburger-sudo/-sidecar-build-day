@@ -405,3 +405,23 @@ test("pointer labels never cover writing in any scripted eval session or demo le
   }
   assert.ok(checked >= 25, `checked ${checked} pointer labels`);
 });
+
+test("balance after the next line is already written goes beside the equation, not on top", () => {
+  const r = applyActions(emptyBoard(), [
+    { type: "write", id: "eq1", text: "3x + 7 = 22", size: "lg" },
+    { type: "write", id: "eq2", text: "3x = 15", size: "lg" },
+    { type: "balance", target: "eq1", text: "− 7" },
+  ] as never);
+  assert.deepEqual(overlaps(textBoxes(r.prims)), []);
+  assert.ok(r.prims.some((p) => p.kind === "text" && /− 7 on both sides/.test(p.text)));
+});
+
+test("cues: each action is timed to where its words are spoken", async () => {
+  const { cueFractions } = await import("../lib/cue");
+  const [c] = cueFractions("I'm circling the plus 7 because it was the last thing added.", [{ type: "circle", target: "eq1", match: "+ 7" }] as never);
+  assert.ok(c > 0.25 && c < 0.45, `circle at ${c}`); // "plus 7" is ~37% of the way in
+  const [p] = cueFractions("First the equation, and look at the 22 on the right.", [{ type: "pointTo", target: "eq1", match: "22" }] as never);
+  assert.ok(p > 0.5, `pointer at ${p}`);
+  const spread = cueFractions("Here we go.", [{ type: "write", text: "zzz" }, { type: "write", text: "qqq" }, { type: "write", text: "vvv" }] as never);
+  assert.ok(spread[0] === 0 && spread[1] > 0 && spread[2] > spread[1], "unmentioned actions are spread through the line");
+});

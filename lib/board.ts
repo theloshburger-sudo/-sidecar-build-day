@@ -43,6 +43,8 @@ export type Prim =
   | { kind: "text"; beat?: number; key: string; x: number; y: number; text: string; size: number; color: string; w: number; bold?: boolean; halo?: boolean; dur: number }
   | { kind: "fill"; beat?: number; key: string; x: number; y: number; w: number; h: number; color: string; opacity: number; dur: number }
   | { kind: "clear"; key: string; dur: number }
+  /** Pen lifted for a moment, so the next stroke lands as its words are spoken (real time, never sped up). */
+  | { kind: "wait"; key: string; dur: number; beat?: number }
   /** Teacher's pointer flies to a box on the board and shows a short label while the line is spoken. */
   | { kind: "point"; beat?: number; key: string; x: number; y: number; w: number; h: number; label: string; dur: number; spot?: PointerSpot };
 
@@ -766,6 +768,18 @@ export function applyActions(prev: BoardState, actions: BoardAction[], measure: 
             const hit = s.labels.filter((o) => [opBox(leftC), opBox(rightC)].some((b) => b.x < o.x + o.w && b.x + b.w > o.x && b.y < o.y + o.h && b.y + b.h > o.y));
             if (!hit.length) break;
             y = Math.max(...hit.map((o) => o.y + o.h)) + line.size * 0.8 + 4;
+          }
+          // Something was already written in that gap (e.g. the next line came before the balance step):
+          // say it beside the equation instead of on top of that writing.
+          const own = (o: Box) => o.y >= el.box.y - 2 && o.y + o.h <= el.box.y + el.box.h + 2;
+          const taken = (s.ink ?? []).some((o) => !own(o) && [opBox(leftC), opBox(rightC)].some((b) => b.x < o.x + o.w - 2 && b.x + b.w > o.x + 2 && b.y < o.y + o.h - 2 && b.y + b.h > o.y + 2));
+          if (taken) {
+            const note = `${text} on both sides`;
+            const x = line.x + measure(line.text, line.size) + 22;
+            const size = FONT.sm;
+            addText(note, x, line.y, size, color, false, true);
+            s.labels.push({ x, y: line.y - size * 0.85, w: measure(note, size), h: size * 1.1 });
+            break;
           }
           addText(text, leftC - sw / 2, y, line.size, color);
           addText(text, rightC - sw / 2, y, line.size, color);

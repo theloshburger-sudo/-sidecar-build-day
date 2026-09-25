@@ -42,7 +42,11 @@ You'll get notes on how this student learns best (from earlier turns and session
 - "question" is the one thing you want them to do or answer now (or "" if none). Usually "Your turn: …".
 - Don't claim fixed "learning styles". The student picked a preferred starting format; adapt based on what actually helps in this session.
 - Videos: suggest 1–2 YouTube searches in "videos" ONLY when truly useful (e.g. they're still stuck after a reteach, or at wrapup). Make the query precise (e.g. "completing the square visual explanation"). Otherwise [].
-- "verdict": grade the student's latest answer to a check/practice question (correct / partial / incorrect), or "none".
+- GRADE BEFORE YOU SPEAK. "assess" comes first in your reply: one short line with the student's latest answer, the correct answer YOU worked out yourself, and whether they match (e.g. "Student: 14. Correct: 22 − 7 = 15. Wrong: subtraction slip."). Use "" only when the student didn't answer anything (a question, "why?", a choice like "I don't know how to start").
+- "verdict" (right after "assess") must agree with it: correct / partial / incorrect, or "none". Your first narrate line must match the verdict:
+    incorrect → say plainly and kindly that it's not right ("Not quite: 22 minus 7 is 15, not 14."), point at the exact spot (pointTo or circle), give the next rung of the hint ladder, and ask them to try again. NEVER praise or say "nice"/"good"/"great" about a wrong answer, and never move on to the next step as if it were right.
+    partial → say what's right, then exactly what's missing.
+    correct → say what they did right and why it works, then move on.
 - "gap": the named missing concept once you know it (e.g. "Inverse operations: undoing +3 before ÷2"), else "".
 - Stay on the student's schoolwork. If asked something unrelated or unsafe, kindly steer back.
 
@@ -107,8 +111,8 @@ Respond with ONLY the JSON object matching the schema. Every field is required; 
 /** Used when the reply isn't schema-constrained: the same turn, described in words. */
 export const PROMPTED_FORMAT = `# Reply format (strict)
 Reply with ONE raw JSON object and nothing else: no markdown fences, no words before or after it.
-Keys in this order: "board" (array of actions, each an object with a "type" and the fields listed for that type), "say" (string), "phase" ("diagnose" | "teach" | "check" | "practice" | "wrapup"), "question" (string), "choices" (array of strings), "gap" (string), "plan" (array of strings), "step" (integer), "videos" (array of {"title","query"}), "practice" (string), "verdict" ("none" | "correct" | "partial" | "incorrect"), "insight" (string).
-Shape example: {"board":[{"type":"narrate","text":"Here's our equation."},{"type":"write","id":"eq1","text":"3x + 7 = 22","zone":"left","size":"lg","color":"ink"},{"type":"narrate","text":"Look at the plus 7."},{"type":"pointTo","target":"eq1","match":"+ 7","text":"undo this"}],"say":"Here's our equation. Look at the plus 7.","phase":"diagnose","question":"Where are you stuck?","choices":["I don't know how to start"],"gap":"","plan":[],"step":0,"videos":[],"practice":"","verdict":"none","insight":""}`;
+Keys in this order: "assess" (string), "verdict" ("none" | "correct" | "partial" | "incorrect"), "board" (array of actions, each an object with a "type" and the fields listed for that type), "say" (string), "phase" ("diagnose" | "teach" | "check" | "practice" | "wrapup"), "question" (string), "choices" (array of strings), "gap" (string), "plan" (array of strings), "step" (integer), "videos" (array of {"title","query"}), "practice" (string), "insight" (string).
+Shape example: {"assess":"","verdict":"none","board":[{"type":"narrate","text":"Here's our equation."},{"type":"write","id":"eq1","text":"3x + 7 = 22","zone":"left","size":"lg","color":"ink"},{"type":"narrate","text":"Look at the plus 7."},{"type":"pointTo","target":"eq1","match":"+ 7","text":"undo this"}],"say":"Here's our equation. Look at the plus 7.","phase":"diagnose","question":"Where are you stuck?","choices":["I don't know how to start"],"gap":"","plan":[],"step":0,"videos":[],"practice":"","insight":""}`;
 
 export function firstMessage(problem: Problem, prefs: Preferences, learner: string[] = []): string {
   return [

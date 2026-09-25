@@ -445,7 +445,9 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
         return;
       }
       const spd0 = syncRef.current ?? speedRef.current;
-      if (next.kind === "point") {
+      if (next.kind === "wait") {
+        cur.current = { prim: next, start: now, from: lastTip.current };
+      } else if (next.kind === "point") {
         // Flight time grows with distance (short hops are quick), and never drags even when speech is slow.
         // Flies from wherever it is (usually next to the student's mouse). Never slower than Clicky.
         stopReturn();
@@ -461,6 +463,13 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
       }
     }
     const { prim, start, from, flight } = cur.current;
+    if (prim.kind === "wait") {
+      // Pen lifted until the words catch up; whatever the pointer is showing stays put.
+      setActive(null);
+      if (now - start >= prim.dur) cur.current = null;
+      raf.current = requestAnimationFrame(tick);
+      return;
+    }
     const spd = syncRef.current ?? speedRef.current;
 
     if (prim.kind === "point") {
@@ -546,7 +555,7 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
       }
       setDone((prev) => {
         let out = [...prev];
-        for (const p of pending) out = p.kind === "clear" ? [] : p.kind === "point" ? out : [...out, p];
+        for (const p of pending) out = p.kind === "clear" ? [] : p.kind === "point" || p.kind === "wait" ? out : [...out, p];
         return out;
       });
       setBusy(false);
