@@ -62,6 +62,61 @@ const VERBS: Partial<Record<BoardAction["type"], RegExp>> = {
   balance: /\bboth sides/,
 };
 
+/** Where (character index into the normalized line) an action's subject is said, from `from` on; null if never. */
+function locate(said: string, a: BoardAction, from: number, lookup: (id: string) => string | undefined, verbAlone = true): number | null {
+  let at: number | null = null;
+  // "…so I circle the 3x": when the line says what it's doing, the thing named after that verb is the one.
+  const verb = VERBS[a.type];
+  const v = verb ? verb.exec(said.slice(from)) : null;
+  const start = v ? from + v.index : from;
+  // With a verb, the mark goes on after it: the thing named after "circle", else the verb itself.
+  for (const phrase of phrasesFor(a, lookup)) {
+    const p = norm(phrase);
+    if (!p) continue;
+    const whole = said.indexOf(p, start);
+    if (whole >= 0) return whole;
+    // Otherwise the most telling word of it (numbers and long words first).
+    const words = p.split(" ").filter((w) => w.length > 1 && !STOP.has(w)).sort((x, y) => Number(/\d/.test(y)) - Number(/\d/.test(x)) || y.length - x.length);
+    for (const w of words) {
+      const re = new RegExp(`(^| )${w.replace(/[.$%]/g, "\\$&")}( |$)`, "g");
+      re.lastIndex = start;
+      const m = re.exec(said);
+      if (m) return m.index + m[1].length;
+    }
+  }
+  if (v && verbAlone) at = start;
+  return at;
+}
+
+/** Marks point at something already on the board; they only make sense once their words are said. */
+const MARKS = new Set<BoardAction["type"]>(["circle", "underline", "highlight", "strike", "pointTo", "arrow"]);
+export const isMark = (a: BoardAction) => MARKS.has(a.type);
+
+/** Does this spoken line name what the action is about? */
+export function mentions(line: string, a: BoardAction, lookup: (id: string) => string | undefined = () => undefined): boolean {
+  const said = norm(line);
+  // Only a real mention counts here ("this"/"that" alone doesn't name anything).
+  return !!said && locate(said, a, 0, lookup, a.type !== "pointTo") != null;
+}
+
+/**
+ * Claude sometimes puts a circle or pointer with the sentence BEFORE the one that explains it
+ * ("We want x alone." + circle "+ 7", then "The plus 7 was added last…"). Move such marks into the
+ * next line when that line names them, so they land on their words instead of on the wrong sentence.
+ */
+export function shiftMarks(beat: { text: string; actions: BoardAction[] }, next: { text: string; actions: BoardAction[] }, lookup: (id: string) => string | undefined = () => undefined) {
+  if (!next.text) return;
+  const keep: BoardAction[] = [];
+  const moved: BoardAction[] = [];
+  for (const a of beat.actions) {
+    if (isMark(a) && !mentions(beat.text, a, lookup) && mentions(next.text, a, lookup)) moved.push(a);
+    else keep.push(a);
+  }
+  if (!moved.length) return;
+  beat.actions.splice(0, beat.actions.length, ...keep);
+  next.actions.unshift(...moved);
+}
+
 const STOP = new Set(["the", "a", "an", "and", "of", "to", "is", "it", "in", "on", "this", "that", "so", "we", "for", "by", "at", "or"]);
 
 /**
@@ -77,35 +132,7 @@ export function cueFractions(line: string, actions: BoardAction[], lookup: (id: 
   const found: (number | null)[] = [];
   let from = 0;
   for (const a of actions) {
-    let at: number | null = null;
-    // "…so I circle the 3x": when the line says what it's doing, the thing named after that verb is the one.
-    const verb = VERBS[a.type];
-    const v = verb ? verb.exec(said.slice(from)) : null;
-    const start = v ? from + v.index : from;
-    // With a verb, the mark goes on after it: the thing named after "circle", else the verb itself.
-    for (const ph of phrasesFor(a, lookup).map((x) => [x, start] as const)) {
-      const [phrase, searchFrom] = ph;
-      const p = norm(phrase);
-      if (!p) continue;
-      const whole = said.indexOf(p, searchFrom);
-      if (whole >= 0) {
-        at = whole;
-        break;
-      }
-      // Otherwise the most telling word of it (numbers and long words first).
-      const words = p.split(" ").filter((w) => w.length > 1 && !STOP.has(w)).sort((x, y) => Number(/\d/.test(y)) - Number(/\d/.test(x)) || y.length - x.length);
-      for (const w of words) {
-        const re = new RegExp(`(^| )${w.replace(/[.$%]/g, "\\$&")}( |$)`, "g");
-        re.lastIndex = searchFrom;
-        const m = re.exec(said);
-        if (m) {
-          at = m.index + m[1].length;
-          break;
-        }
-      }
-      if (at != null) break;
-    }
-    if (at == null && v) at = start;
+    const at = locate(said, a, from, lookup);
     found.push(at == null ? null : at / said.length);
     if (at != null) from = at;
   }
@@ -119,7 +146,11 @@ export function cueFractions(line: string, actions: BoardAction[], lookup: (id: 
     const run = j - i;
     const lo = i > 0 ? (out[i - 1] as number) : 0;
     const hi = j < n ? (found[j] as number) : Math.max(lo, 0.85);
-    for (let m = i; m < j; m++) out[m] = i === 0 ? lo + ((hi - lo) * (m - i)) / run : lo + ((hi - lo) * (m - i + 1)) / (run + 1);
+    for (let m = i; m < j; m++) {
+      // An unexplained mark goes as late as it can (right before the next thing that IS named), never at the start.
+      if (isMark(actions[m])) out[m] = Math.max(lo, hi - 0.04 * (j - 1 - m));
+      else out[m] = i === 0 ? lo + ((hi - lo) * (m - i)) / run : lo + ((hi - lo) * (m - i + 1)) / (run + 1);
+    }
     i = j - 1;
   }
   let prev = 0;
