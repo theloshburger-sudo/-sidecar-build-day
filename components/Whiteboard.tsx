@@ -27,8 +27,6 @@ interface Props {
   onInkChange?: (strokes: number) => void;
   /** The beat being spoken right now: its strokes glow so you can see what the words are about. */
   focusBeat?: number | null;
-  /** Numbered badges (①②③) next to what each spoken line drew, matching the caption. */
-  tags?: { n: number; x: number; y: number; uid: number }[];
 }
 
 const INK_COLOR = "#12a150";
@@ -194,21 +192,6 @@ const DoneLayer = memo(function DoneLayer({ prims, focus }: { prims: Prim[]; foc
   );
 });
 
-function BeatTags({ tags, focus }: { tags: NonNullable<Props["tags"]>; focus: number | null }) {
-  return (
-    <g className="wb-tags">
-      {tags.map((t) => (
-        <g key={t.uid} transform={`translate(${t.x} ${t.y})`} className={t.uid === focus ? "wb-tag wb-tag--now" : "wb-tag"}>
-          <circle r={13} />
-          <text textAnchor="middle" y={5.5}>
-            {t.n}
-          </text>
-        </g>
-      ))}
-    </g>
-  );
-}
-
 interface PointerState {
   key: string;
   beat?: number;
@@ -307,7 +290,7 @@ function Marker({ tip, erasing }: { tip: Pt; erasing: boolean }) {
   );
 }
 
-const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ height, speed, onBusyChange, empty, penMode = false, onInkChange, focusBeat = null, tags = [] }, ref) {
+const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ height, speed, onBusyChange, empty, penMode = false, onInkChange, focusBeat = null }, ref) {
   const [done, setDone] = useState<Prim[]>([]);
   const [active, setActive] = useState<{ prim: Prim; t: number; tip: Pt } | null>(null);
   const [pointer, setPointer] = useState<PointerState | null>(null);
@@ -414,13 +397,9 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
     setInk((s) => [...s, [p]]);
   };
   const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (!penMode) {
-      const m = toBoard(e);
-      if (!m) return;
-      mouse.current = m;
-      if (phase.current === "none" || phase.current === "follow") followAt(m);
-      return;
-    }
+    // Teacher's pointer is Teacher's hand, not a second cursor: it doesn't shadow the student's mouse
+    // (that read as a glitch on a whiteboard). It only appears when Teacher points at something.
+    if (!penMode) return;
     if (!drawing.current) return;
     const p = toBoard(e);
     if (!p) return;
@@ -504,7 +483,7 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
           phase.current = "rest";
           restBeat.current = prim.beat;
           if (holdTimer.current) clearTimeout(holdTimer.current);
-          holdTimer.current = setTimeout(() => phase.current === "rest" && flyBack(), 3000);
+          // Stays on its target for the rest of the spoken line; the next line moves it on.
         }
       }
       raf.current = requestAnimationFrame(tick);
@@ -540,7 +519,9 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
       if (!prims.length) return;
       if (syncMs && syncMs > 0) {
         const natural = prims.reduce((acc, p) => acc + p.dur + TRAVEL_MS, 0);
-        syncRef.current = Math.min(3, Math.max(0.35, natural / syncMs));
+        // Match the drawing to the spoken line, but never rush it: at most 1.4x hand speed. If the picture
+        // needs longer than the sentence, Teacher finishes drawing before moving on, like a real teacher.
+        syncRef.current = Math.min(1.4, Math.max(0.35, natural / syncMs));
       } else {
         syncRef.current = null;
       }
@@ -675,7 +656,6 @@ const Whiteboard = forwardRef<WhiteboardHandle, Props>(function Whiteboard({ hei
             <PrimView p={active.prim} t={active.t} />
           </g>
         )}
-        <BeatTags tags={tags} focus={focusBeat} />
         <g className="wb-ink">
           {ink.map((st, i) =>
             st.length === 1 ? (

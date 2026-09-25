@@ -8,7 +8,7 @@ import VideoCards from "./VideoCards";
 import MathText from "./MathText";
 import { RECAPS_KEY, loadRecaps } from "./Home";
 import type { AppStatus, Engine } from "./SidecarApp";
-import { applyActions, badgeSpot, boardHeight, describeBoard, emptyBoard, primsBox, BOARD_MIN_H, type BoardState, type Measure } from "@/lib/board";
+import { applyActions, boardHeight, describeBoard, emptyBoard, BOARD_MIN_H, type BoardState, type Measure } from "@/lib/board";
 import { getDemo } from "@/lib/demo";
 import { demoReply, demoStart, type DemoState } from "@/lib/demo-engine";
 import { browserVoices, createRecognizer, isEcho, prefetchVoice, setVoiceChoice, speak, speakAsync, speechRecognitionSupported, stopSpeaking, ttsSupported, unlockAudio, warmVoices, onVoiceProblem } from "@/lib/speech";
@@ -95,7 +95,6 @@ export default function Session({
   const [activeBeat, setActiveBeat] = useState(-1);
   /** Glow + numbered badges that tie each spoken line to the strokes it draws. */
   const [focusBeat, setFocusBeat] = useState<number | null>(null);
-  const [tags, setTags] = useState<{ n: number; x: number; y: number; uid: number }[]>([]);
   const beatUid = useRef(0);
   const [streaming, setStreaming] = useState(false);
   const [penMode, setPenMode] = useState(false);
@@ -189,18 +188,9 @@ export default function Session({
     const res = applyActions(board.current, beat.actions, measure.current ?? undefined);
     board.current = res.state;
     setBoardH(boardHeight(res.state));
-    // Tag this beat's strokes so they glow while the line is spoken, and badge them with the line's number.
+    // Tag this beat's strokes so they glow while the line is spoken: that highlight (and the pointer) shows what the words are about.
     const uid = ++beatUid.current;
     for (const p of res.prims) if (p.kind !== "clear") p.beat = uid;
-    const clearAt = res.prims.findIndex((p) => p.kind === "clear");
-    const drawn = clearAt >= 0 ? res.prims.slice(clearAt + 1) : res.prims;
-    const bb = primsBox(drawn);
-    setTags((t) => {
-      const kept = clearAt >= 0 ? [] : t;
-      if (!bb || !beat.text) return kept;
-      const spot = badgeSpot(res.state, bb, kept);
-      return [...kept, { n, uid, x: spot.x, y: spot.y }];
-    });
     setFocusBeat(uid);
     const p = prefsRef.current;
     const auto = !p.speed;
@@ -253,7 +243,6 @@ export default function Session({
 
     setBeatLines([]);
     setActiveBeat(-1);
-    setTags([]);
     setFocusBeat(null);
     (async () => {
       while (alive()) {
@@ -776,7 +765,6 @@ export default function Session({
                       // When done: just the last line, usually the question. The full text is in the chat.
                       line && (activeBeat === -1 ? i === lastBeatIdx : i <= activeBeat && i >= activeBeat - 1) ? (
                         <span key={i} data-beat={i} className={`beat ${activeBeat === -1 ? "" : i === activeBeat ? "beat--now" : "beat--past"}`}>
-                          {tags.some((t) => t.n === i + 1) && <span className="beat-badge">{i + 1}</span>}
                           <MathText text={line} />{" "}
                         </span>
                       ) : null,
@@ -908,7 +896,6 @@ export default function Session({
               penMode={penMode}
               onInkChange={setInkCount}
               focusBeat={focusBeat}
-              tags={tags}
               empty={
                 <div className="wb-empty-inner">
                   <Cloud size={96} mood="thinking" />
