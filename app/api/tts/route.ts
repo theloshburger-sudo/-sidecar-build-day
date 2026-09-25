@@ -66,8 +66,15 @@ export async function POST(req: Request) {
     // A picked voice that's unavailable on this account falls back to the default voice.
     if (!res.ok && voice !== VOICE && res.status >= 400 && res.status < 500 && res.status !== 429) res = await callWithRetry(key, VOICE, text);
     if (!res.ok || !res.body) {
-      console.error("tts error", { voice, status: res.status, body: (await res.text().catch(() => "")).slice(0, 300) });
-      return Response.json({ error: "tts_failed" }, { status: 502 });
+      const body = (await res.text().catch(() => "")).slice(0, 300);
+      console.error("tts error", { voice, status: res.status, body });
+      // Pass ElevenLabs' own reason on (quota, free tier blocked, voice not on plan…) so the page can show it.
+      let detail = body;
+      try {
+        const j = JSON.parse(body) as { detail?: { message?: string; status?: string } | string };
+        detail = typeof j.detail === "string" ? j.detail : j.detail?.message || j.detail?.status || body;
+      } catch {}
+      return Response.json({ error: "tts_failed", status: res.status, detail: detail.slice(0, 200) }, { status: 502 });
     }
     return new Response(res.body, { headers: { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" } });
   } catch (e) {

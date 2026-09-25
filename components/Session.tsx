@@ -11,7 +11,7 @@ import type { AppStatus, Engine } from "./SidecarApp";
 import { applyActions, badgeSpot, boardHeight, describeBoard, emptyBoard, primsBox, BOARD_MIN_H, type BoardState, type Measure } from "@/lib/board";
 import { getDemo } from "@/lib/demo";
 import { demoReply, demoStart, type DemoState } from "@/lib/demo-engine";
-import { browserVoices, createRecognizer, isEcho, prefetchVoice, setVoiceChoice, speak, speakAsync, speechRecognitionSupported, stopSpeaking, ttsSupported, unlockAudio, warmVoices } from "@/lib/speech";
+import { browserVoices, createRecognizer, isEcho, prefetchVoice, setVoiceChoice, speak, speakAsync, speechRecognitionSupported, stopSpeaking, ttsSupported, unlockAudio, warmVoices, onVoiceProblem } from "@/lib/speech";
 import { DEFAULT_VOICE, NATURAL_VOICES } from "@/lib/voices";
 import { BeatBuilder, beatsFromTurn, type Beat } from "@/lib/narration";
 import { BoardStreamParser, STREAM_ERROR } from "@/lib/stream-parse";
@@ -147,6 +147,10 @@ export default function Session({
     load();
     window.speechSynthesis.addEventListener("voiceschanged", load);
     return () => window.speechSynthesis.removeEventListener("voiceschanged", load);
+  }, []);
+  useEffect(() => {
+    onVoiceProblem((msg) => setNotice(`🔇 Natural voice unavailable, using this device's voice. ${msg}`));
+    return () => onVoiceProblem(null);
   }, []);
   const pickVoice = (v: string) => {
     setPrefs({ voiceName: v });

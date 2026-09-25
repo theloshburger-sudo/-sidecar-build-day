@@ -223,6 +223,18 @@ export interface SpeakOptions {
 
 const estimateMs = (text: string, rate: number) => (text.split(/\s+/).filter(Boolean).length / 2.6 / rate) * 1000 + 300;
 
+let voiceProblemHandler: ((msg: string) => void) | null = null;
+let voiceProblemShown = false;
+/** Called (once per page load) with the reason natural-voice clips are failing. */
+export function onVoiceProblem(fn: ((msg: string) => void) | null) {
+  voiceProblemHandler = fn;
+}
+function reportVoiceProblem(msg: string) {
+  if (voiceProblemShown || !voiceProblemHandler) return;
+  voiceProblemShown = true;
+  voiceProblemHandler(msg);
+}
+
 // ElevenLabs refuses requests beyond a plan's concurrency limit (2 on the free tier) with a 429,
 // and each refused line fell back to the device voice. Keep at most 2 in flight, in order.
 const TTS_MAX_IN_FLIGHT = 2;
@@ -259,7 +271,13 @@ function fetchTTS(text: string, urgent = false, voiceId?: string): Promise<Blob 
     const ctrl = new AbortController();
     const giveUp = setTimeout(() => ctrl.abort(), 9000);
     return fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: clean, voice }), signal: ctrl.signal })
-      .then((r) => (r.ok ? r.blob() : null))
+      .then(async (r) => {
+        if (r.ok) return r.blob();
+        // Tell the page once why the natural voice isn't working (it falls back to the device voice).
+        const j = (await r.json().catch(() => ({}))) as { status?: number; detail?: string; error?: string };
+        reportVoiceProblem(`${j.status ? `ElevenLabs ${j.status}` : `Voice server ${r.status}`}${j.detail ? `: ${j.detail}` : j.error ? `: ${j.error}` : ""}`);
+        return null;
+      })
       .catch(() => null)
       .finally(() => {
         clearTimeout(giveUp);
