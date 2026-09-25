@@ -8,10 +8,10 @@ import VideoCards from "./VideoCards";
 import MathText from "./MathText";
 import { RECAPS_KEY, loadRecaps } from "./Home";
 import type { AppStatus, Engine } from "./SidecarApp";
-import { applyActions, badgeSpot, boardHeight, describeBoard, emptyBoard, primsBox, BOARD_MIN_H, type BoardState, type Measure } from "@/lib/board";
+import { applyActions, boardHeight, describeBoard, emptyBoard, BOARD_MIN_H, type BoardState, type Measure } from "@/lib/board";
 import { getDemo } from "@/lib/demo";
 import { demoReply, demoStart, type DemoState } from "@/lib/demo-engine";
-import { browserVoices, createRecognizer, isEcho, prefetchVoice, setVoiceChoice, speak, speakAsync, speechRecognitionSupported, stopSpeaking, ttsSupported } from "@/lib/speech";
+import { browserVoices, createRecognizer, isEcho, prefetchVoice, setVoiceChoice, speak, speakAsync, speechRecognitionSupported, stopSpeaking, ttsSupported, unlockAudio, warmVoices, onVoiceProblem } from "@/lib/speech";
 import { DEFAULT_VOICE, NATURAL_VOICES } from "@/lib/voices";
 import { BeatBuilder, beatsFromTurn, type Beat } from "@/lib/narration";
 import { BoardStreamParser, STREAM_ERROR } from "@/lib/stream-parse";
@@ -48,6 +48,8 @@ function makeMeasure(): Measure {
     return w;
   };
 }
+
+const PREVIEW_LINE = "Hi! This is how I'll sound.";
 
 export default function Session({
   assignment,
@@ -93,7 +95,6 @@ export default function Session({
   const [activeBeat, setActiveBeat] = useState(-1);
   /** Glow + numbered badges that tie each spoken line to the strokes it draws. */
   const [focusBeat, setFocusBeat] = useState<number | null>(null);
-  const [tags, setTags] = useState<{ n: number; x: number; y: number; uid: number }[]>([]);
   const beatUid = useRef(0);
   const [streaming, setStreaming] = useState(false);
   const [penMode, setPenMode] = useState(false);
@@ -134,7 +135,10 @@ export default function Session({
   const [browserList, setBrowserList] = useState<string[]>([]);
   const naturalOn = Boolean(status?.voice);
   const saved = prefs.voiceName || "";
-  const voiceName = saved && (naturalOn || saved.startsWith("browser:")) ? saved : naturalOn ? DEFAULT_VOICE : "";
+  // Natural voices on: only those count (an old device-voice pick falls back to the default).
+  const voiceName = naturalOn
+    ? NATURAL_VOICES.some((v) => v.id === saved) ? saved : DEFAULT_VOICE
+    : saved.startsWith("browser:") ? saved : "";
   setVoiceChoice(voiceName);
   useEffect(() => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
@@ -143,11 +147,24 @@ export default function Session({
     window.speechSynthesis.addEventListener("voiceschanged", load);
     return () => window.speechSynthesis.removeEventListener("voiceschanged", load);
   }, []);
+  useEffect(() => {
+    onVoiceProblem((msg) => setNotice(`🔇 Natural voice unavailable, using this device's voice. ${msg}`));
+    return () => onVoiceProblem(null);
+  }, []);
   const pickVoice = (v: string) => {
     setPrefs({ voiceName: v });
     setVoiceChoice(v);
-    // Let the student hear who they picked (only between lines, never over Teacher mid-sentence).
-    if (!busyRef.current) speak("Hi! This is how I'll sound.", { natural: naturalOn, rate: prefs.voiceSpeed || 1 });
+    unlockAudio();
+    const name = NATURAL_VOICES.find((x) => x.id === v)?.label.split(" ·")[0] ?? v.replace(/^browser:/, "");
+    // Let the student hear who they picked. Mid-sentence, a preview would be cut off by
+    // Teacher's next line, so say who takes over instead.
+    if (busyRef.current || speakingRef.current) setNotice(`🗣️ ${name} will speak from Teacher's next line.`);
+    else speak(PREVIEW_LINE, { natural: naturalOn, rate: prefs.voiceSpeed || 1 });
+  };
+  // Opening the picker fetches every voice's preview, so picking one plays instantly.
+  const warmPreviews = () => {
+    unlockAudio();
+    if (naturalOn) warmVoices(PREVIEW_LINE, NATURAL_VOICES.map((v) => v.id));
   };
 
   const lastTutor = useMemo(() => {
@@ -171,18 +188,9 @@ export default function Session({
     const res = applyActions(board.current, beat.actions, measure.current ?? undefined);
     board.current = res.state;
     setBoardH(boardHeight(res.state));
-    // Tag this beat's strokes so they glow while the line is spoken, and badge them with the line's number.
+    // Tag this beat's strokes so they glow while the line is spoken: that highlight (and the pointer) shows what the words are about.
     const uid = ++beatUid.current;
     for (const p of res.prims) if (p.kind !== "clear") p.beat = uid;
-    const clearAt = res.prims.findIndex((p) => p.kind === "clear");
-    const drawn = clearAt >= 0 ? res.prims.slice(clearAt + 1) : res.prims;
-    const bb = primsBox(drawn);
-    setTags((t) => {
-      const kept = clearAt >= 0 ? [] : t;
-      if (!bb || !beat.text) return kept;
-      const spot = badgeSpot(res.state, bb, kept);
-      return [...kept, { n, uid, x: spot.x, y: spot.y }];
-    });
     setFocusBeat(uid);
     const p = prefsRef.current;
     const auto = !p.speed;
@@ -192,14 +200,18 @@ export default function Session({
         rate: p.voiceSpeed || 1,
         natural: Boolean(statusRef.current?.voice),
         onStart: (ms) => {
-          if (!alive()) return;
+          // Once per line: a second start (voice fallback) must never draw the beat twice.
+          if (!alive() || drawn) return;
           drawn = true;
           setSpeaking(true);
           wb.current?.enqueue(res.prims, auto ? ms * 0.9 : undefined);
         },
       });
       await speech;
-      if (!drawn) wb.current?.enqueue(res.prims);
+      if (!drawn) {
+        drawn = true;
+        wb.current?.enqueue(res.prims);
+      }
       setSpeaking(false);
       await wb.current?.whenIdle();
     } else {
@@ -231,7 +243,6 @@ export default function Session({
 
     setBeatLines([]);
     setActiveBeat(-1);
-    setTags([]);
     setFocusBeat(null);
     (async () => {
       while (alive()) {
@@ -375,6 +386,7 @@ export default function Session({
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         const parser = new BoardStreamParser();
+        const streamed: BoardAction[] = [];
         for (;;) {
           const { value, done } = await reader.read();
           if (done) break;
@@ -387,9 +399,22 @@ export default function Session({
               setThinking(false);
             }
             pl.push(action as unknown as BoardAction);
+            streamed.push(action as unknown as BoardAction);
           }
         }
-        const turn = normalizeTurn(JSON.parse(parser.text));
+        let parsed: unknown;
+        try {
+          // The JSON object itself, even if a stray ``` fence or a word slipped in around it.
+          const raw = parser.text;
+          const a = raw.indexOf("{");
+          const b = raw.lastIndexOf("}");
+          parsed = JSON.parse(a >= 0 && b > a ? raw.slice(a, b + 1) : raw);
+        } catch {
+          // Cut off mid-reply (length limit, dropped connection): keep what Teacher already said and drew.
+          if (!streamed.length) throw new Error("Teacher's answer got cut off. Try again.");
+          parsed = { board: streamed };
+        }
+        const turn = normalizeTurn(parsed);
         if (!pl) pl = startPlayer();
         setThinking(false);
         finishTurn(turn);
@@ -739,8 +764,7 @@ export default function Session({
                       // While teaching: the line being spoken (and the one before it, fading).
                       // When done: just the last line, usually the question. The full text is in the chat.
                       line && (activeBeat === -1 ? i === lastBeatIdx : i <= activeBeat && i >= activeBeat - 1) ? (
-                        <span key={i} className={`beat ${activeBeat === -1 ? "" : i === activeBeat ? "beat--now" : "beat--past"}`}>
-                          {tags.some((t) => t.n === i + 1) && <span className="beat-badge">{i + 1}</span>}
+                        <span key={i} data-beat={i} className={`beat ${activeBeat === -1 ? "" : i === activeBeat ? "beat--now" : "beat--past"}`}>
                           <MathText text={line} />{" "}
                         </span>
                       ) : null,
@@ -838,7 +862,13 @@ export default function Session({
               {prefs.voice && (naturalOn || browserList.length > 0) && (
                 <label className="voice-pick" title="Who Teacher sounds like">
                   <span aria-hidden>🗣️</span>
-                  <select aria-label="Teacher's voice" value={voiceName || (browserList[0] ? `browser:${browserList[0]}` : "")} onChange={(e) => pickVoice(e.target.value)}>
+                  <select
+                    aria-label="Teacher's voice"
+                    value={voiceName || (browserList[0] ? `browser:${browserList[0]}` : "")}
+                    onPointerDown={warmPreviews}
+                    onFocus={warmPreviews}
+                    onChange={(e) => pickVoice(e.target.value)}
+                  >
                     {naturalOn && (
                       <optgroup label="Natural voices">
                         {NATURAL_VOICES.map((v) => (
@@ -846,7 +876,8 @@ export default function Session({
                         ))}
                       </optgroup>
                     )}
-                    {browserList.length > 0 && (
+                    {/* With natural voices available, only those are offered (device voices sound robotic). */}
+                    {!naturalOn && browserList.length > 0 && (
                       <optgroup label="This device's voices">
                         {browserList.map((n) => (
                           <option key={n} value={`browser:${n}`}>{n}</option>
@@ -865,7 +896,6 @@ export default function Session({
               penMode={penMode}
               onInkChange={setInkCount}
               focusBeat={focusBeat}
-              tags={tags}
               empty={
                 <div className="wb-empty-inner">
                   <Cloud size={96} mood="thinking" />

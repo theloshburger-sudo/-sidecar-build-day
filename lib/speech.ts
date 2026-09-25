@@ -90,6 +90,8 @@ export function isEcho(heard: string, speaking: string): boolean {
 }
 
 let preferred: SpeechSynthesisVoice | null = null;
+/** Browser voices that failed to speak on this device; skipped from then on. */
+const broken = new Set<string>();
 /** The student's voice pick: a natural voice id (e.g. "george") or "browser:<voice name>". */
 let choice = "";
 
@@ -103,7 +105,7 @@ export function setVoiceChoice(v: string) {
 export function browserVoices(): string[] {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return [];
   const voices = window.speechSynthesis.getVoices().filter((v) => v.lang?.toLowerCase().startsWith("en"));
-  return [...voices].sort((a, b) => voiceScore(b) - voiceScore(a)).filter((v) => voiceScore(v) > -50).slice(0, 8).map((v) => v.name);
+  return [...voices].sort((a, b) => voiceScore(b) - voiceScore(a)).filter((v) => voiceScore(v) > -50 && !broken.has(v.name)).slice(0, 6).map((v) => v.name);
 }
 
 function voiceScore(v: SpeechSynthesisVoice) {
@@ -115,6 +117,10 @@ function voiceScore(v: SpeechSynthesisVoice) {
   if (/ava|aria|jenny|emma|samantha|allison|zoe|serena/.test(n)) s += 10;
   if (/en-us/i.test(v.lang)) s += 5;
   if (/compact|espeak|fred|albert|zarvox|whisper|bad news|bells|boing|bubbles|cellos|jester|organ|trinoids|wobble/.test(n)) s -= 100;
+  // macOS joke voices and the robotic "Eloquence" set: fine for a laugh, wrong for a tutor.
+  if (/\b(bahh|good news|superstar|junior|ralph|kathy|eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley)\b/.test(n)) s -= 100;
+  // Voices that sound natural on each platform.
+  if (/samantha|alex|daniel|karen|moira|tessa|google us english|google uk english/.test(n)) s += 20;
   return s;
 }
 
@@ -123,9 +129,9 @@ function pickVoice(): SpeechSynthesisVoice | null {
   if (preferred) return preferred;
   const voices = window.speechSynthesis.getVoices().filter((v) => v.lang?.toLowerCase().startsWith("en"));
   if (!voices.length) return null;
-  const picked = choice.startsWith("browser:") ? voices.find((v) => v.name === choice.slice(8)) : undefined;
+  const picked = choice.startsWith("browser:") ? voices.find((v) => v.name === choice.slice(8) && !broken.has(v.name)) : undefined;
   if (picked) return (preferred = picked);
-  preferred = [...voices].sort((a, b) => voiceScore(b) - voiceScore(a))[0] ?? null;
+  preferred = [...voices].filter((v) => !broken.has(v.name)).sort((a, b) => voiceScore(b) - voiceScore(a))[0] ?? null;
   return preferred;
 }
 
@@ -162,6 +168,45 @@ export function speakable(text: string): string {
 
 // ---- playback state (one voice at a time) ----
 let audio: HTMLAudioElement | null = null;
+
+// Safari only lets an <audio> element play from a click; our clips arrive a moment after the click.
+// So Teacher reuses ONE element, unlocked on the student's first tap/keypress with a tiny silent clip.
+let player: HTMLAudioElement | null = null;
+let unlocked = false;
+function getPlayer(): HTMLAudioElement | null {
+  if (!player && typeof Audio !== "undefined") player = new Audio();
+  return player;
+}
+function silentWav(): string {
+  const b = new ArrayBuffer(46);
+  const v = new DataView(b);
+  const str = (o: number, t: string) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  str(0, "RIFF"); v.setUint32(4, 38, true); str(8, "WAVE"); str(12, "fmt ");
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 8000, true); v.setUint32(28, 16000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  str(36, "data"); v.setUint32(40, 2, true); v.setInt16(44, 0, true);
+  return URL.createObjectURL(new Blob([b], { type: "audio/wav" }));
+}
+/** Call from a user gesture (tap, click, key). Safe to call often. */
+export function unlockAudio() {
+  const p = getPlayer();
+  if (!p || unlocked || (audio && !audio.paused)) return; // never interrupt a clip that's playing
+  try {
+    p.src = silentWav();
+    void p.play().then(() => (unlocked = true)).catch(() => {});
+  } catch {}
+}
+if (typeof window !== "undefined") {
+  const onGesture = () => {
+    unlockAudio();
+    if (unlocked) {
+      window.removeEventListener("pointerdown", onGesture, true);
+      window.removeEventListener("keydown", onGesture, true);
+    }
+  };
+  window.addEventListener("pointerdown", onGesture, true);
+  window.addEventListener("keydown", onGesture, true);
+}
 let token = 0;
 const waiting = new Set<() => void>();
 const ttsCache = new Map<string, Promise<Blob | null>>();
@@ -178,23 +223,79 @@ export interface SpeakOptions {
 
 const estimateMs = (text: string, rate: number) => (text.split(/\s+/).filter(Boolean).length / 2.6 / rate) * 1000 + 300;
 
+let voiceProblemHandler: ((msg: string) => void) | null = null;
+let voiceProblemShown = false;
+/** Called (once per page load) with the reason natural-voice clips are failing. */
+export function onVoiceProblem(fn: ((msg: string) => void) | null) {
+  voiceProblemHandler = fn;
+}
+function reportVoiceProblem(msg: string) {
+  if (voiceProblemShown || !voiceProblemHandler) return;
+  voiceProblemShown = true;
+  voiceProblemHandler(msg);
+}
+
+// ElevenLabs refuses requests beyond a plan's concurrency limit (2 on the free tier) with a 429,
+// and each refused line fell back to the device voice. Keep at most 2 in flight, in order.
+const TTS_MAX_IN_FLIGHT = 2;
+let ttsInFlight = 0;
+const ttsWaiting: (() => void)[] = [];
+function ttsSlot(urgent = false): Promise<() => void> {
+  return new Promise((resolve) => {
+    const take = () => {
+      ttsInFlight++;
+      let freed = false;
+      resolve(() => {
+        if (freed) return;
+        freed = true;
+        ttsInFlight--;
+        ttsWaiting.shift()?.();
+      });
+    };
+    if (ttsInFlight < TTS_MAX_IN_FLIGHT) take();
+    else if (urgent) ttsWaiting.unshift(take);
+    else ttsWaiting.push(take);
+  });
+}
+
 /** Fetch (and cache) natural-voice audio, so the next beat is ready before the current one ends. */
-function fetchTTS(text: string): Promise<Blob | null> {
+function fetchTTS(text: string, urgent = false, voiceId?: string): Promise<Blob | null> {
   const clean = speakable(text);
   if (!clean) return Promise.resolve(null);
-  const voice = choice.startsWith("browser:") ? "" : choice;
+  const voice = voiceId ?? (choice.startsWith("browser:") ? "" : choice);
   const cacheKey = `${voice}|${clean}`;
   const hit = ttsCache.get(cacheKey);
   if (hit) return hit;
-  const ctrl = new AbortController();
-  const giveUp = setTimeout(() => ctrl.abort(), 6000);
-  const p = fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: clean, voice }), signal: ctrl.signal })
-    .then((r) => (r.ok ? r.blob() : null))
-    .catch(() => null)
-    .finally(() => clearTimeout(giveUp));
+  const p = ttsSlot(urgent).then((release) => {
+    // The clock starts when the request does, not while it waits its turn.
+    const ctrl = new AbortController();
+    const giveUp = setTimeout(() => ctrl.abort(), 9000);
+    return fetch("/api/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: clean, voice }), signal: ctrl.signal })
+      .then(async (r) => {
+        if (r.ok) return r.blob();
+        // Tell the page once why the natural voice isn't working (it falls back to the device voice).
+        const j = (await r.json().catch(() => ({}))) as { status?: number; detail?: string; error?: string };
+        reportVoiceProblem(`${j.status ? `ElevenLabs ${j.status}` : `Voice server ${r.status}`}${j.detail ? `: ${j.detail}` : j.error ? `: ${j.error}` : ""}`);
+        return null;
+      })
+      .catch(() => null)
+      .finally(() => {
+        clearTimeout(giveUp);
+        release();
+      });
+  });
   ttsCache.set(cacheKey, p);
+  // A failed clip isn't remembered: the next time this line comes up, try again.
+  void p.then((b) => {
+    if (!b && ttsCache.get(cacheKey) === p) ttsCache.delete(cacheKey);
+  });
   if (ttsCache.size > 60) ttsCache.delete(ttsCache.keys().next().value!);
   return p;
+}
+
+/** Fetch a line in several natural voices ahead of time (e.g. voice previews when the picker opens). */
+export function warmVoices(text: string, voiceIds: string[]) {
+  for (const v of voiceIds) void fetchTTS(text, false, v);
 }
 
 export function prefetchVoice(text: string) {
@@ -217,8 +318,11 @@ export function speak(text: string, opts: SpeakOptions = {}) {
     return;
   }
 
+  let retried = false;
+  let gen = 0; // each attempt (first voice, retry voice) ignores callbacks from the other
   const browserVoice = () => {
     if (my !== token) return;
+    const g = ++gen;
     if (!ttsSupported()) {
       opts.onStart?.(estimateMs(clean, rate));
       setTimeout(() => my === token && opts.onEnd?.(), estimateMs(clean, rate));
@@ -234,6 +338,14 @@ export function speak(text: string, opts: SpeakOptions = {}) {
       ended = true;
       opts.onEnd?.();
     };
+    // No audible speech (no voices, muted tab, speech error): keep the lesson's rhythm with the
+    // estimated duration. Runs at most once, and never after the line already started or ended.
+    const silent = () => {
+      if (started || ended || my !== token || g !== gen) return;
+      started = true;
+      opts.onStart?.(estimateMs(clean, rate));
+      setTimeout(finish, estimateMs(clean, rate));
+    };
     parts.forEach((part, i) => {
       const u = new SpeechSynthesisUtterance(part);
       if (v) u.voice = v;
@@ -241,33 +353,43 @@ export function speak(text: string, opts: SpeakOptions = {}) {
       u.pitch = 1.02;
       if (i === 0)
         u.onstart = () => {
-          if (my !== token || started) return;
+          if (my !== token || started || g !== gen) return;
           started = true;
           opts.onStart?.(estimateMs(clean, rate));
         };
-      if (i === parts.length - 1) {
-        u.onend = finish;
-        u.onerror = finish;
-      }
+      // An error (or an end without a start) before any sound means nothing was heard:
+      // skip that voice for good and say the line again with the next-best one.
+      u.onerror = (e?: { error?: string }) => {
+        if (g !== gen) return;
+        if (started) return void (i === parts.length - 1 && finish());
+        const err = e?.error ?? "";
+        if (v && !retried && my === token && err !== "interrupted" && err !== "canceled") {
+          retried = true;
+          broken.add(v.name);
+          preferred = null;
+          gen++; // retire this attempt before cancel() fires its own errors
+          synth.cancel();
+          return browserVoice();
+        }
+        silent();
+      };
+      if (i === parts.length - 1) u.onend = () => g === gen && (started ? finish() : silent());
       synth.speak(u);
     });
     // Some browsers never fire events (muted tab, no voices): don't hold the lesson hostage.
-    setTimeout(() => {
-      if (my === token && !started) {
-        started = true;
-        opts.onStart?.(estimateMs(clean, rate));
-        setTimeout(finish, estimateMs(clean, rate));
-      }
-    }, 900);
+    setTimeout(silent, 900);
   };
 
   if (!opts.natural || choice.startsWith("browser:")) return browserVoice();
 
-  fetchTTS(text).then((blob) => {
+  // The line being said now goes ahead of prefetches for later lines.
+  fetchTTS(text, true).then((blob) => {
     if (my !== token) return;
     if (!blob) return browserVoice();
     const url = URL.createObjectURL(blob);
-    const el = new Audio(url);
+    const el = getPlayer() ?? new Audio();
+    el.onplaying = el.onended = el.onerror = null;
+    el.src = url;
     audio = el;
     el.playbackRate = rate;
     (el as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;
@@ -282,8 +404,15 @@ export function speak(text: string, opts: SpeakOptions = {}) {
       URL.revokeObjectURL(url);
       if (my === token) opts.onEnd?.();
     };
-    el.onerror = () => browserVoice();
-    el.play().catch(() => browserVoice()); // autoplay blocked or decode error
+    // Both can fire for one failure (decode error + rejected play): fall back only once.
+    let fellBack = false;
+    const fallBack = () => {
+      if (fellBack || started) return;
+      fellBack = true;
+      browserVoice();
+    };
+    el.onerror = fallBack;
+    el.play().catch(fallBack); // autoplay blocked or decode error
   });
 }
 

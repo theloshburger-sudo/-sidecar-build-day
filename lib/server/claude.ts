@@ -90,12 +90,17 @@ export function retryable(err: unknown): boolean {
 // ---- very small in-memory rate limiter (per server instance) ----
 const hits = new Map<string, number[]>();
 
-export function rateLimited(req: Request, limit = 40, windowMs = 10 * 60_000): boolean {
+/**
+ * Each route counts in its own bucket: Teacher fetches a voice clip for every spoken line,
+ * and those must not use up the student's budget of tutor turns.
+ */
+export function rateLimited(req: Request, limit = 40, windowMs = 10 * 60_000, bucket = "tutor"): boolean {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "local";
+  const k = `${bucket}|${ip}`;
   const now = Date.now();
-  const list = (hits.get(ip) ?? []).filter((t) => now - t < windowMs);
+  const list = (hits.get(k) ?? []).filter((t) => now - t < windowMs);
   list.push(now);
-  hits.set(ip, list);
+  hits.set(k, list);
   if (hits.size > 5000) hits.clear();
   return list.length > limit;
 }

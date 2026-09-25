@@ -1,0 +1,333 @@
+[
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Hi! Let's lay out what we know. On October 1 they paid 12,000 dollars for 12 months of insurance."
+   },
+   {
+    "type": "box",
+    "id": "given",
+    "text": "Given",
+    "items": [
+     "Paid $12,000 on Oct 1",
+     "Covers 12 months",
+     "Year ends Dec 31"
+    ],
+    "zone": "left",
+    "color": "ink"
+   },
+   {
+    "type": "narrate",
+    "text": "Here's the timeline, so we can see how much of the policy is used up by December 31."
+   },
+   {
+    "type": "timeline",
+    "id": "tl",
+    "text": "Insurance policy",
+    "items": [
+     "Oct 1: paid $12,000",
+     "Dec 31: adjust",
+     "Sep 30: policy ends"
+    ]
+   },
+   {
+    "type": "narrate",
+    "text": "Where are you stuck?"
+   }
+  ],
+  "say": "",
+  "phase": "diagnose",
+  "question": "Where are you stuck?",
+  "choices": [
+   "I don't know what to adjust",
+   "I can't get the amount",
+   "Which accounts do I use?"
+  ],
+  "gap": "",
+  "plan": [],
+  "step": 0,
+  "videos": [],
+  "practice": "",
+  "verdict": "none",
+  "insight": ""
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "When they paid, the whole 12,000 went into Prepaid Insurance, an asset, because they hadn't used any coverage yet."
+   },
+   {
+    "type": "tAccount",
+    "id": "pre",
+    "text": "Prepaid Insurance",
+    "debits": [
+     "Oct 1: 12,000"
+    ],
+    "credits": []
+   },
+   {
+    "type": "narrate",
+    "text": "Each month uses up one twelfth of it. That's 12,000 divided by 12, which is 1,000 a month."
+   },
+   {
+    "type": "write",
+    "id": "rate",
+    "text": "12,000 ÷ 12 = 1,000 per month",
+    "zone": "left",
+    "size": "md",
+    "color": "blue"
+   },
+   {
+    "type": "narrate",
+    "text": "Your turn: how many months have been used from October 1 to December 31?"
+   },
+   {
+    "type": "pointTo",
+    "target": "tl",
+    "match": "Dec 31",
+    "text": "count months"
+   }
+  ],
+  "say": "",
+  "phase": "teach",
+  "question": "Your turn: how many months of insurance were used by Dec 31? What's the expense?",
+  "choices": [],
+  "gap": "",
+  "plan": [
+   "Find monthly cost",
+   "Months used",
+   "Journal entry"
+  ],
+  "step": 0,
+  "videos": [],
+  "practice": "",
+  "verdict": "none",
+  "insight": ""
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Not quite. December 31 is the end of the third month: October, November, December."
+   },
+   {
+    "type": "pointTo",
+    "target": "tl",
+    "match": "Oct 1",
+    "text": "start"
+   },
+   {
+    "type": "pointTo",
+    "target": "tl",
+    "match": "Dec 31",
+    "text": "3 months later"
+   },
+   {
+    "type": "narrate",
+    "text": "So it's 3 months, not 2. What's 3 times 1,000?"
+   },
+   {
+    "type": "pointTo",
+    "target": "rate",
+    "match": "1,000",
+    "text": "per month"
+   }
+  ],
+  "say": "",
+  "phase": "check",
+  "question": "Your turn: 3 × 1,000 = ?",
+  "choices": [],
+  "gap": "",
+  "plan": [],
+  "step": 0,
+  "videos": [],
+  "practice": "",
+  "verdict": "incorrect",
+  "insight": "Counts months by subtracting; needs to count them"
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Yes, 3,000 of insurance is used up. Used-up insurance becomes an expense, so we debit Insurance Expense."
+   },
+   {
+    "type": "tAccount",
+    "id": "exp",
+    "text": "Insurance Expense",
+    "debits": [
+     "Dec 31: 3,000"
+    ],
+    "credits": []
+   },
+   {
+    "type": "narrate",
+    "text": "And we credit Prepaid Insurance, because 3,000 of that asset is gone."
+   },
+   {
+    "type": "pointTo",
+    "target": "pre",
+    "match": "12,000",
+    "text": "was 12,000"
+   },
+   {
+    "type": "narrate",
+    "text": "Here's the entry side by side with the T-accounts."
+   },
+   {
+    "type": "box",
+    "id": "je",
+    "text": "Dec 31 entry",
+    "items": [
+     "Dr Insurance Expense 3,000",
+     "  Cr Prepaid Insurance 3,000"
+    ],
+    "zone": "left",
+    "color": "green"
+   }
+  ],
+  "say": "",
+  "phase": "check",
+  "question": "Your turn: what's left in Prepaid Insurance after this entry?",
+  "choices": [],
+  "gap": "",
+  "plan": [],
+  "step": 2,
+  "videos": [],
+  "practice": "",
+  "verdict": "correct",
+  "insight": ""
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Sure, let's look at it as a picture instead. Think of the policy as a bar of 12 months."
+   },
+   {
+    "type": "canvas",
+    "id": "bar",
+    "zone": "right",
+    "text": "12-month policy"
+   },
+   {
+    "type": "sketch",
+    "id": "used",
+    "target": "bar",
+    "kind": "rect",
+    "x": 5,
+    "y": 35,
+    "x2": 30,
+    "y2": 60,
+    "r": 0,
+    "text": "",
+    "items": [],
+    "color": "orange"
+   },
+   {
+    "type": "sketch",
+    "id": "left",
+    "target": "bar",
+    "kind": "rect",
+    "x": 30,
+    "y": 35,
+    "x2": 95,
+    "y2": 60,
+    "r": 0,
+    "text": "",
+    "items": [],
+    "color": "blue"
+   },
+   {
+    "type": "narrate",
+    "text": "The orange part is the three months used: that's the 3,000 expense. The blue part is still prepaid."
+   },
+   {
+    "type": "sketch",
+    "id": "lu",
+    "target": "bar",
+    "kind": "text",
+    "x": 17,
+    "y": 72,
+    "x2": 0,
+    "y2": 0,
+    "r": 6,
+    "text": "3 used",
+    "items": [],
+    "color": "orange"
+   },
+   {
+    "type": "sketch",
+    "id": "ll",
+    "target": "bar",
+    "kind": "text",
+    "x": 62,
+    "y": 72,
+    "x2": 0,
+    "y2": 0,
+    "r": 6,
+    "text": "9 left",
+    "items": [],
+    "color": "blue"
+   },
+   {
+    "type": "pointTo",
+    "target": "ll",
+    "match": "",
+    "text": "still an asset"
+   }
+  ],
+  "say": "",
+  "phase": "teach",
+  "question": "Your turn: what's the Prepaid Insurance balance now?",
+  "choices": [],
+  "gap": "",
+  "plan": [],
+  "step": 0,
+  "videos": [],
+  "practice": "",
+  "verdict": "none",
+  "insight": "A picture helps when the numbers feel abstract"
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Right, 9,000 is still prepaid. That's 9 months of coverage they haven't used yet."
+   },
+   {
+    "type": "write",
+    "id": "bal",
+    "text": "Prepaid balance = 9,000",
+    "zone": "left",
+    "size": "md",
+    "color": "green"
+   },
+   {
+    "type": "narrate",
+    "text": "Try one: on March 1 a company pays 6,000 for 6 months of rent. What's the adjusting entry on April 30?"
+   },
+   {
+    "type": "divider",
+    "zone": "left"
+   },
+   {
+    "type": "askQuestion",
+    "text": "Rent: $6,000, 6 months"
+   }
+  ],
+  "say": "",
+  "phase": "practice",
+  "question": "Write the Apr 30 adjusting entry.",
+  "choices": [],
+  "gap": "",
+  "plan": [],
+  "step": 0,
+  "videos": [],
+  "practice": "On Mar 1 a company pays $6,000 for 6 months of rent. What adjusting entry is needed on Apr 30?",
+  "verdict": "correct",
+  "insight": ""
+ }
+]

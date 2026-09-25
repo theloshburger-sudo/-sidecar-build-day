@@ -291,3 +291,117 @@ test("the pointer's label bubble never covers writing", () => {
     }
   }
 });
+
+test("pointTo never jumps to a look-alike elsewhere on the board", async () => {
+  const { shortLabel } = await import("../lib/board");
+  const pts = (acts: Parameters<typeof applyActions>[1]) =>
+    applyActions(emptyBoard(), acts).prims.filter((p) => p.kind === "point") as { x: number; y: number; w: number; h: number; label: string }[];
+  const econ: Parameters<typeof applyActions>[1] = [
+    { type: "write", id: "d", text: "Demand: P = 10 − 0.5Q" },
+    { type: "graph", id: "g1", zone: "right", xMin: 0, xMax: 16, yMin: 0, yMax: 12, xLabel: "Quantity", yLabel: "Price", text: "" },
+    { type: "point", target: "g1", x: 8, y: 6, text: "E (8, 6)" },
+  ];
+  const board = applyActions(emptyBoard(), econ).state;
+  const g = board.els.g1.box;
+  // "E" isn't a word inside the graph: ring the graph, not the "e" in "Demand".
+  const [p] = pts([...econ, { type: "pointTo", target: "g1", match: "E", text: "equilibrium" }]);
+  assert.ok(p.x >= g.x - 4 && p.x + p.w <= g.x + g.w + 4, "stays on the graph");
+  // Unknown id + a single character: too ambiguous to guess, so don't point at all.
+  assert.equal(pts([...econ, { type: "pointTo", target: "nope", match: "E", text: "?" }]).length, 0);
+  // Unknown id + real words: find the words.
+  const [w] = pts([...econ, { type: "pointTo", target: "nope", match: "10 − 0.5Q", text: "demand" }]);
+  assert.ok(w && w.y < g.y + g.h && w.x < 580, "lands on the demand equation");
+  // A match inside a flow's pieces lands on that piece, not on the whole chain.
+  const flow: Parameters<typeof applyActions>[1] = [
+    { type: "flow", id: "ch", text: "Chain", items: [], zone: "full" },
+    { type: "add", target: "ch", text: "Austria attacks Serbia" },
+    { type: "add", target: "ch", text: "Russia mobilizes" },
+  ];
+  const s = applyActions(emptyBoard(), flow).state;
+  const [f] = pts([...flow, { type: "pointTo", target: "ch", match: "Russia", text: "Serbia's ally" }]);
+  const piece = s.els["ch.2"].box;
+  assert.ok(f.x >= piece.x - 2 && f.x + f.w <= piece.x + piece.w + 2, "on the Russia box");
+  // Long labels are cut at a word, never mid-word.
+  assert.equal(shortLabel("the point where both curves finally cross", 28), "the point where both curves…");
+  assert.equal(shortLabel("your turn", 28), "your turn");
+});
+
+test("pointing at part of a line never parks the cursor on the rest of that line", async () => {
+  const { approxMeasure } = await import("../lib/board");
+  for (const [text, match] of [["3x + 7 = 22", "+ 7"], ["3x + 7 = 22", "3x"], ["10 − 0.5Q = 2 + 0.5Q", "2"], ["Demand: P = 10 − 0.5Q", "10"]]) {
+    const { state, prims } = applyActions(emptyBoard(), [
+      { type: "write", id: "eq1", text, size: "lg" },
+      { type: "balance", target: "eq1", text: "− 7" },
+      { type: "pointTo", target: "eq1", match, text: "cancels out" },
+    ]);
+    const el = state.els.eq1 as { lines: { x: number; y: number; size: number; text: string }[] };
+    const line = el.lines[0];
+    const at = line.text.indexOf(match);
+    const others = [
+      { x: line.x, w: approxMeasure(line.text.slice(0, at).trimEnd(), line.size) },
+      { x: line.x + approxMeasure(line.text.slice(0, at + match.length + 1), line.size), w: approxMeasure(line.text.slice(at + match.length + 1), line.size) },
+    ]
+      .filter((o) => o.w > 2)
+      .map((o) => ({ ...o, y: line.y - line.size * 0.82, h: line.size }));
+    const p = prims.find((q) => q.kind === "point") as { spot: { tip: [number, number]; rot: number; bx: number; by: number; bw: number; bh: number } };
+    const a = (p.spot.rot * Math.PI) / 180;
+    const body = { x: p.spot.tip[0] - Math.sin(a) * 14 - 8, y: p.spot.tip[1] + Math.cos(a) * 14 - 8, w: 16, h: 16 };
+    const bubble = { x: p.spot.bx, y: p.spot.by, w: p.spot.bw, h: p.spot.bh };
+    const ov = (r: typeof body, o: typeof body) => Math.min(r.x + r.w, o.x + o.w) - Math.max(r.x, o.x) > 1 && Math.min(r.y + r.h, o.y + o.h) - Math.max(r.y, o.y) > 1;
+    for (const o of others) {
+      assert.ok(!ov(body, o), `cursor covers the rest of "${text}" when pointing at "${match}"`);
+      assert.ok(!ov(bubble, o), `label covers the rest of "${text}" when pointing at "${match}"`);
+    }
+  }
+});
+
+test("pointing at a big box keeps the cursor and label off the words inside it", () => {
+  const acts: Parameters<typeof applyActions>[1] = [{ type: "flow", id: "ch", text: "Chain", items: [], zone: "full" }];
+  for (const t of ["Austria attacks Serbia", "Russia mobilizes", "Germany → Russia, France", "Germany invades Belgium", "Britain declares war"]) acts.push({ type: "add", target: "ch", text: t });
+  const { state, prims } = applyActions(emptyBoard(), [...acts, { type: "pointTo", target: "ch.4", match: "", text: "the trigger" }]);
+  const el = state.els["ch.4"] as { lines: { x: number; y: number; size: number; text: string }[] };
+  const words = el.lines.map((l) => ({ x: l.x, y: l.y - l.size * 0.82, w: l.text.length * l.size * 0.5, h: l.size }));
+  const p = prims.find((q) => q.kind === "point") as { spot: { tip: [number, number]; bx: number; by: number; bw: number; bh: number } };
+  const ov = (r: { x: number; y: number; w: number; h: number }, o: typeof r) => Math.min(r.x + r.w, o.x + o.w) - Math.max(r.x, o.x) > 1 && Math.min(r.y + r.h, o.y + o.h) - Math.max(r.y, o.y) > 1;
+  const tip = { x: p.spot.tip[0] - 2, y: p.spot.tip[1] - 2, w: 4, h: 4 };
+  for (const w of words) {
+    assert.ok(!ov(tip, w), "cursor tip sits on the box's words");
+    assert.ok(!ov({ x: p.spot.bx, y: p.spot.by, w: p.spot.bw, h: p.spot.bh }, w), "label covers the box's words");
+  }
+});
+
+test("pointer labels never cover writing in any scripted eval session or demo lesson", async () => {
+  const { readdirSync, readFileSync } = await import("node:fs");
+  const dir = new URL("../docs/eval/sim/", import.meta.url);
+  const scripts: { name: string; turns: { board: Parameters<typeof applyActions>[1] }[] }[] = readdirSync(dir)
+    .filter((f: string) => f.endsWith(".json"))
+    .map((f: string) => ({ name: f, turns: JSON.parse(readFileSync(new URL(f, dir), "utf8")) }));
+  for (const demo of DEMO_ASSIGNMENTS) scripts.push({ name: demo.demoId, turns: demo.lesson.script.map((t) => ({ board: t.board ?? [] })) });
+  const ov = (r: { x: number; y: number; w: number; h: number }, o: typeof r, m = 0) =>
+    Math.min(r.x + r.w, o.x + o.w) - Math.max(r.x, o.x) > m && Math.min(r.y + r.h, o.y + o.h) - Math.max(r.y, o.y) > m;
+  let checked = 0;
+  for (const sc of scripts) {
+    let state = emptyBoard();
+    let written: { x: number; y: number; w: number; h: number }[] = [];
+    for (const turn of sc.turns) {
+      for (const action of turn.board) {
+        const res = applyActions(state, [action]);
+        state = res.state;
+        const before = { ink: written };
+        for (const p of res.prims) {
+          if (p.kind === "clear") written = [];
+          if (p.kind === "text") written = [...written, { x: p.x, y: p.y - p.size * 0.85, w: p.w, h: p.size * 1.1 }];
+          if (p.kind !== "point" || !p.spot || !p.label) continue;
+          checked++;
+          const target = { x: p.x, y: p.y, w: p.w, h: p.h };
+          const bubble = { x: p.spot.bx, y: p.spot.by, w: p.spot.bw, h: p.spot.bh };
+          for (const ink of before.ink) {
+            if (ov(ink, target, -2)) continue; // the thing being pointed at (and its own line)
+            assert.ok(!ov(bubble, ink, 2), `${sc.name}: label "${p.label}" covers writing at ${Math.round(ink.x)},${Math.round(ink.y)}`);
+          }
+        }
+      }
+    }
+  }
+  assert.ok(checked >= 25, `checked ${checked} pointer labels`);
+});

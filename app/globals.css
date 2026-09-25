@@ -1529,21 +1529,25 @@ sub { top: 0.25em; }
 
 /* ---------------------------------------------------------------- Teacher's pointer (flies to what's being talked about) */
 .wb-pointer { pointer-events: none; }
-.wb-pointer-tri { fill: #1a8cff; stroke: #ffffff; stroke-width: 1.6; stroke-linejoin: round; }
+.wb-pointer-tri { fill: #3380ff; }
+/* Following the student's mouse: Clicky's quick spring (response 0.2 s, a little overshoot). */
+.wb-pointer-follow { transition: transform 0.22s cubic-bezier(0.34, 1.45, 0.64, 1); }
 .wb-pointer-ring {
-  fill: rgba(79, 195, 255, 0.1);
-  stroke: #4fc3ff;
+  fill: rgba(51, 128, 255, 0.08);
+  stroke: #3380ff;
   stroke-width: 2.5;
-  filter: drop-shadow(0 0 6px rgba(79, 195, 255, 0.8));
+  filter: drop-shadow(0 0 6px rgba(51, 128, 255, 0.7));
   animation: ptrRingIn 0.35s ease-out, ptrRingPulse 1.6s ease-in-out 0.35s infinite;
   transform-box: fill-box;
   transform-origin: center;
 }
-.wb-pointer-bubble { transform-box: fill-box; transform-origin: 0% 0%; animation: ptrPop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1); }
+/* Clicky's label: pops in from half size with a bright glow that settles. */
+.wb-pointer-bubble { transform-box: fill-box; transform-origin: 0% 0%; animation: ptrPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .wb-pointer-bubble--left { transform-origin: 100% 0%; }
-.wb-pointer-bubble rect { fill: #1a8cff; filter: drop-shadow(0 0 8px rgba(79, 195, 255, 0.7)); }
-.wb-pointer-bubble text { fill: #ffffff; font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif; font-weight: 700; }
+.wb-pointer-bubble rect { fill: #3380ff; animation: ptrGlow 0.9s ease-out forwards; }
+.wb-pointer-bubble text { fill: #ffffff; font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif; font-weight: 600; }
 @keyframes ptrPop { from { transform: scale(0.5); opacity: 0.2; } to { transform: scale(1); opacity: 1; } }
+@keyframes ptrGlow { from { filter: drop-shadow(0 0 22px rgba(51, 128, 255, 1)); } to { filter: drop-shadow(0 0 6px rgba(51, 128, 255, 0.5)); } }
 @keyframes ptrRingIn { from { transform: scale(1.25); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes ptrRingPulse { 50% { stroke-opacity: 0.45; fill-opacity: 0.4; } }
-@media (prefers-reduced-motion: reduce) { .wb-pointer-ring, .wb-pointer-bubble { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .wb-pointer-ring, .wb-pointer-bubble, .wb-pointer-bubble rect { animation: none; } .wb-pointer-follow { transition: none; } }

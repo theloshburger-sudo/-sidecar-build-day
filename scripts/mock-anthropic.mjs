@@ -8,6 +8,7 @@ const port = Number(process.argv[2] || 4010);
 const log = process.argv[3];
 const REJECT_SCHEMA_ONCE = process.env.MOCK_REJECT_SCHEMA === "1";
 let rejected = false;
+let emptied = false;
 // MOCK_OVERLOAD=n: the first n streamed calls fail with an overloaded_error event before any text.
 let overloads = Number(process.env.MOCK_OVERLOAD || 0);
 let turnNo = 0;
@@ -74,13 +75,20 @@ createServer((req, res) => {
     const payload = isExtract
       ? { assignmentName: "Homework 5", problems: [{ title: "1. Solve 5x − 4 = 21", text: "1. Solve 5x − 4 = 21", subject: "Algebra" }] }
       : turns[Math.min(turnNo++, turns.length - 1)];
-    const text = hasFormat ? JSON.stringify(payload) : "```json\n" + JSON.stringify(payload) + "\n```";
+    let text = hasFormat ? JSON.stringify(payload) : "```json\n" + JSON.stringify(payload) + "\n```";
+    // MOCK_TRUNCATE=1: the reply stops partway through (like hitting max_tokens).
+    if (process.env.MOCK_TRUNCATE === "1" && json.stream) text = text.slice(0, Math.floor(text.length * 0.6));
     if (log) appendFileSync(log, JSON.stringify({ stream: Boolean(json.stream), image: JSON.stringify(json.messages ?? []).includes('"type":"image"'), cached: JSON.stringify(json.system ?? "").includes("cache_control") }) + "\n");
     if (json.stream && overloads > 0) {
       overloads--;
       res.writeHead(200, { "content-type": "text/event-stream" });
       res.write(`event: error\ndata: ${JSON.stringify({ type: "error", error: { type: "overloaded_error", message: "Overloaded" } })}\n\n`);
       return res.end();
+    }
+    // MOCK_EMPTY_ONCE=1: the first schema-constrained stream ends without any text.
+    if (json.stream && hasFormat && process.env.MOCK_EMPTY_ONCE === "1" && !emptied) {
+      emptied = true;
+      text = "";
     }
     if (json.stream) {
       res.writeHead(200, { "content-type": "text/event-stream" });

@@ -1,0 +1,253 @@
+[
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Hi! Here are the two lines. Demand slopes down: higher price, fewer buyers."
+   },
+   {
+    "type": "write",
+    "id": "d",
+    "text": "Demand: P = 10 − 0.5Q",
+    "zone": "left",
+    "size": "md",
+    "color": "blue"
+   },
+   {
+    "type": "write",
+    "id": "s",
+    "text": "Supply: P = 2 + 0.5Q",
+    "zone": "left",
+    "size": "md",
+    "color": "orange"
+   },
+   {
+    "type": "narrate",
+    "text": "Let me put both on a graph so we can see where they meet."
+   },
+   {
+    "type": "graph",
+    "id": "g1",
+    "zone": "right",
+    "xMin": 0,
+    "xMax": 16,
+    "yMin": 0,
+    "yMax": 12,
+    "xLabel": "Quantity",
+    "yLabel": "Price",
+    "text": "Market"
+   },
+   {
+    "type": "plot",
+    "target": "g1",
+    "fn": "10-0.5x",
+    "items": [],
+    "text": "D",
+    "color": "blue"
+   },
+   {
+    "type": "plot",
+    "target": "g1",
+    "fn": "2+0.5x",
+    "items": [],
+    "text": "S",
+    "color": "orange"
+   },
+   {
+    "type": "narrate",
+    "text": "Where do you want to start?"
+   }
+  ],
+  "say": "",
+  "phase": "diagnose",
+  "question": "Where are you stuck?",
+  "choices": [
+   "How do I find equilibrium?",
+   "I can't solve it",
+   "Check my answer"
+  ],
+  "gap": "",
+  "plan": [],
+  "step": 0,
+  "videos": [],
+  "practice": "",
+  "verdict": "none",
+  "insight": ""
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Equilibrium is where buyers and sellers agree on the same price, so we set the two P's equal."
+   },
+   {
+    "type": "pointTo",
+    "target": "g1",
+    "match": "8,6",
+    "text": "they meet"
+   },
+   {
+    "type": "write",
+    "id": "eq",
+    "text": "10 − 0.5Q = 2 + 0.5Q",
+    "zone": "left",
+    "size": "md",
+    "color": "ink"
+   },
+   {
+    "type": "narrate",
+    "text": "Let's get the Q's on one side by adding 0.5Q to both sides."
+   },
+   {
+    "type": "balance",
+    "target": "eq",
+    "text": "+ 0.5Q"
+   },
+   {
+    "type": "narrate",
+    "text": "Your turn: what do you get after that?"
+   }
+  ],
+  "say": "",
+  "phase": "teach",
+  "question": "Your turn: add 0.5Q to both sides and simplify.",
+  "choices": [],
+  "gap": "",
+  "plan": [
+   "Set D = S",
+   "Solve Q",
+   "Find P",
+   "Show on graph"
+  ],
+  "step": 0,
+  "videos": [],
+  "practice": "",
+  "verdict": "none",
+  "insight": ""
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Almost. The Q's combine to one whole Q, but the 2 is still stuck on the right."
+   },
+   {
+    "type": "pointTo",
+    "target": "eq",
+    "match": "2",
+    "text": "still here"
+   },
+   {
+    "type": "narrate",
+    "text": "So it's 10 equals 2 plus Q. What's Q when you take 2 away?"
+   },
+   {
+    "type": "write",
+    "id": "eq2",
+    "text": "10 = 2 + Q",
+    "zone": "left",
+    "size": "md",
+    "color": "ink"
+   }
+  ],
+  "say": "",
+  "phase": "check",
+  "question": "Your turn: solve 10 = 2 + Q.",
+  "choices": [],
+  "gap": "",
+  "plan": [],
+  "step": 0,
+  "videos": [],
+  "practice": "",
+  "verdict": "partial",
+  "insight": ""
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Yes, Q is 8. Now plug 8 into either line to get the price: 10 minus half of 8 is 6."
+   },
+   {
+    "type": "write",
+    "id": "q",
+    "text": "Q* = 8,  P* = 10 − 4 = 6",
+    "zone": "left",
+    "size": "md",
+    "color": "green"
+   },
+   {
+    "type": "narrate",
+    "text": "And here's that point on the graph: 8 units at a price of 6."
+   },
+   {
+    "type": "point",
+    "target": "g1",
+    "x": 8,
+    "y": 6,
+    "text": "E (8, 6)"
+   },
+   {
+    "type": "narrate",
+    "text": "Check it with supply: 2 plus half of 8 is also 6. Both lines agree."
+   },
+   {
+    "type": "pointTo",
+    "target": "s",
+    "match": "2 + 0.5Q",
+    "text": "gives 6 too"
+   }
+  ],
+  "say": "",
+  "phase": "check",
+  "question": "Your turn: at a price of 8, is there a shortage or a surplus?",
+  "choices": [],
+  "gap": "",
+  "plan": [],
+  "step": 3,
+  "videos": [],
+  "practice": "",
+  "verdict": "correct",
+  "insight": ""
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Right, a surplus. At 8, sellers want 12 units but buyers only want 4."
+   },
+   {
+    "type": "graphArrow",
+    "target": "g1",
+    "x1": 4,
+    "y1": 8,
+    "x2": 12,
+    "y2": 8,
+    "text": "surplus"
+   },
+   {
+    "type": "narrate",
+    "text": "Try one: demand P equals 12 minus Q, supply P equals Q. Find the equilibrium."
+   },
+   {
+    "type": "divider",
+    "zone": "left"
+   },
+   {
+    "type": "askQuestion",
+    "text": "P = 12 − Q, P = Q"
+   }
+  ],
+  "say": "",
+  "phase": "practice",
+  "question": "Find Q* and P*.",
+  "choices": [],
+  "gap": "",
+  "plan": [],
+  "step": 0,
+  "videos": [],
+  "practice": "Demand P = 12 − Q, supply P = Q. Find equilibrium Q and P.",
+  "verdict": "correct",
+  "insight": ""
+ }
+]

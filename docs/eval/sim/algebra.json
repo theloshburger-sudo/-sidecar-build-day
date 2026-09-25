@@ -1,0 +1,282 @@
+[
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Hi! Here's the equation we're solving. Our job is to get x all by itself."
+   },
+   {
+    "type": "write",
+    "id": "eq1",
+    "text": "3x + 7 = 22",
+    "zone": "left",
+    "size": "lg",
+    "color": "ink"
+   },
+   {
+    "type": "narrate",
+    "text": "Two things happened to x here: it got multiplied by 3, then 7 got added."
+   },
+   {
+    "type": "pointTo",
+    "target": "eq1",
+    "match": "3x",
+    "text": "times 3"
+   },
+   {
+    "type": "pointTo",
+    "target": "eq1",
+    "match": "+ 7",
+    "text": "then + 7"
+   },
+   {
+    "type": "narrate",
+    "text": "Where does it get tricky for you?"
+   }
+  ],
+  "say": "",
+  "phase": "diagnose",
+  "question": "Where are you stuck?",
+  "choices": [
+   "I don't know how to start",
+   "I get stuck after one step",
+   "Can you check my answer?"
+  ],
+  "gap": "",
+  "plan": [],
+  "step": 0,
+  "videos": [],
+  "practice": "",
+  "verdict": "none",
+  "insight": ""
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "We undo things in reverse order, like taking off your shoes before your socks. The plus 7 was done last, so it goes first."
+   },
+   {
+    "type": "circle",
+    "target": "eq1",
+    "match": "+ 7",
+    "text": "undo first",
+    "color": "red"
+   },
+   {
+    "type": "narrate",
+    "text": "To undo plus 7, we take 7 away from BOTH sides, so the equation stays balanced."
+   },
+   {
+    "type": "balance",
+    "target": "eq1",
+    "text": "− 7"
+   },
+   {
+    "type": "narrate",
+    "text": "Your turn: what does the right side become? What's 22 minus 7?"
+   },
+   {
+    "type": "pointTo",
+    "target": "eq1",
+    "match": "22",
+    "text": "your turn"
+   }
+  ],
+  "say": "",
+  "phase": "teach",
+  "question": "Your turn: what is 22 − 7? Write the new equation.",
+  "choices": [],
+  "gap": "",
+  "plan": [
+   "Undo + 7",
+   "Undo × 3",
+   "Check"
+  ],
+  "step": 0,
+  "videos": [],
+  "practice": "",
+  "verdict": "none",
+  "insight": ""
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Close, but 29 is what we'd get if we added 7. We're taking 7 away."
+   },
+   {
+    "type": "pointTo",
+    "target": "eq1",
+    "match": "22",
+    "text": "22 − 7"
+   },
+   {
+    "type": "narrate",
+    "text": "Think of 22 steps forward, then 7 steps back. Where do you land?"
+   },
+   {
+    "type": "write",
+    "id": "h1",
+    "text": "22 − 7 = ?",
+    "zone": "left",
+    "size": "md",
+    "color": "orange"
+   }
+  ],
+  "say": "",
+  "phase": "check",
+  "question": "Your turn: 22 − 7 = ?",
+  "choices": [],
+  "gap": "Inverse operations: undo + 7 by subtracting 7",
+  "plan": [],
+  "step": 0,
+  "videos": [],
+  "practice": "",
+  "verdict": "incorrect",
+  "insight": "Mixes up adding and subtracting when undoing"
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Great question. The equals sign is like a balance scale: whatever we do to one side, we do to the other, so it stays level."
+   },
+   {
+    "type": "note",
+    "id": "why",
+    "text": "Balance rule",
+    "items": [
+     "Same move on both sides",
+     "Undo the LAST thing first"
+    ],
+    "zone": "right",
+    "color": "blue"
+   },
+   {
+    "type": "narrate",
+    "text": "We subtract 7 because it's the opposite of plus 7. It cancels the 7 on the left and leaves just 3x."
+   },
+   {
+    "type": "pointTo",
+    "target": "eq1",
+    "match": "+ 7",
+    "text": "cancels out"
+   },
+   {
+    "type": "narrate",
+    "text": "So now, 22 take away 7 is what?"
+   },
+   {
+    "type": "pointTo",
+    "target": "h1",
+    "match": "?",
+    "text": "your turn"
+   }
+  ],
+  "say": "",
+  "phase": "teach",
+  "question": "Your turn: 22 − 7 = ?",
+  "choices": [],
+  "gap": "",
+  "plan": [],
+  "step": 0,
+  "videos": [],
+  "practice": "",
+  "verdict": "none",
+  "insight": "Wants the reason behind each step"
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Yes, 15. So now we have 3x equals 15."
+   },
+   {
+    "type": "write",
+    "id": "eq2",
+    "text": "3x = 15",
+    "zone": "left",
+    "size": "lg",
+    "color": "green"
+   },
+   {
+    "type": "narrate",
+    "text": "x is still being multiplied by 3, so what's the opposite of times 3?"
+   },
+   {
+    "type": "pointTo",
+    "target": "eq2",
+    "match": "3x",
+    "text": "× 3 left"
+   }
+  ],
+  "say": "",
+  "phase": "check",
+  "question": "Your turn: undo the × 3. What is x?",
+  "choices": [],
+  "gap": "",
+  "plan": [],
+  "step": 1,
+  "videos": [],
+  "practice": "",
+  "verdict": "correct",
+  "insight": ""
+ },
+ {
+  "board": [
+   {
+    "type": "narrate",
+    "text": "Exactly! Divide both sides by 3, and x equals 5."
+   },
+   {
+    "type": "balance",
+    "target": "eq2",
+    "text": "÷ 3"
+   },
+   {
+    "type": "write",
+    "id": "eq3",
+    "text": "x = 5",
+    "zone": "left",
+    "size": "lg",
+    "color": "green"
+   },
+   {
+    "type": "narrate",
+    "text": "Let's check: 3 times 5 is 15, plus 7 is 22. It works."
+   },
+   {
+    "type": "write",
+    "id": "chk",
+    "text": "3(5) + 7 = 22 ✓",
+    "zone": "left",
+    "size": "md",
+    "color": "green"
+   },
+   {
+    "type": "narrate",
+    "text": "Try this one on your own: 4x minus 5 equals 19."
+   },
+   {
+    "type": "divider",
+    "zone": "left"
+   },
+   {
+    "type": "askQuestion",
+    "text": "4x − 5 = 19"
+   }
+  ],
+  "say": "",
+  "phase": "practice",
+  "question": "Solve 4x − 5 = 19 and tell me x.",
+  "choices": [],
+  "gap": "",
+  "plan": [],
+  "step": 3,
+  "videos": [],
+  "practice": "Solve 4x − 5 = 19",
+  "verdict": "correct",
+  "insight": ""
+ }
+]
