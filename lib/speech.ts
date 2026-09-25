@@ -168,6 +168,45 @@ export function speakable(text: string): string {
 
 // ---- playback state (one voice at a time) ----
 let audio: HTMLAudioElement | null = null;
+
+// Safari only lets an <audio> element play from a click; our clips arrive a moment after the click.
+// So Teacher reuses ONE element, unlocked on the student's first tap/keypress with a tiny silent clip.
+let player: HTMLAudioElement | null = null;
+let unlocked = false;
+function getPlayer(): HTMLAudioElement | null {
+  if (!player && typeof Audio !== "undefined") player = new Audio();
+  return player;
+}
+function silentWav(): string {
+  const b = new ArrayBuffer(46);
+  const v = new DataView(b);
+  const str = (o: number, t: string) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  str(0, "RIFF"); v.setUint32(4, 38, true); str(8, "WAVE"); str(12, "fmt ");
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 8000, true); v.setUint32(28, 16000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  str(36, "data"); v.setUint32(40, 2, true); v.setInt16(44, 0, true);
+  return URL.createObjectURL(new Blob([b], { type: "audio/wav" }));
+}
+/** Call from a user gesture (tap, click, key). Safe to call often. */
+export function unlockAudio() {
+  const p = getPlayer();
+  if (!p || unlocked || (audio && !audio.paused)) return; // never interrupt a clip that's playing
+  try {
+    p.src = silentWav();
+    void p.play().then(() => (unlocked = true)).catch(() => {});
+  } catch {}
+}
+if (typeof window !== "undefined") {
+  const onGesture = () => {
+    unlockAudio();
+    if (unlocked) {
+      window.removeEventListener("pointerdown", onGesture, true);
+      window.removeEventListener("keydown", onGesture, true);
+    }
+  };
+  window.addEventListener("pointerdown", onGesture, true);
+  window.addEventListener("keydown", onGesture, true);
+}
 let token = 0;
 const waiting = new Set<() => void>();
 const ttsCache = new Map<string, Promise<Blob | null>>();
@@ -208,10 +247,10 @@ function ttsSlot(urgent = false): Promise<() => void> {
 }
 
 /** Fetch (and cache) natural-voice audio, so the next beat is ready before the current one ends. */
-function fetchTTS(text: string, urgent = false): Promise<Blob | null> {
+function fetchTTS(text: string, urgent = false, voiceId?: string): Promise<Blob | null> {
   const clean = speakable(text);
   if (!clean) return Promise.resolve(null);
-  const voice = choice.startsWith("browser:") ? "" : choice;
+  const voice = voiceId ?? (choice.startsWith("browser:") ? "" : choice);
   const cacheKey = `${voice}|${clean}`;
   const hit = ttsCache.get(cacheKey);
   if (hit) return hit;
@@ -234,6 +273,11 @@ function fetchTTS(text: string, urgent = false): Promise<Blob | null> {
   });
   if (ttsCache.size > 60) ttsCache.delete(ttsCache.keys().next().value!);
   return p;
+}
+
+/** Fetch a line in several natural voices ahead of time (e.g. voice previews when the picker opens). */
+export function warmVoices(text: string, voiceIds: string[]) {
+  for (const v of voiceIds) void fetchTTS(text, false, v);
 }
 
 export function prefetchVoice(text: string) {
@@ -325,7 +369,9 @@ export function speak(text: string, opts: SpeakOptions = {}) {
     if (my !== token) return;
     if (!blob) return browserVoice();
     const url = URL.createObjectURL(blob);
-    const el = new Audio(url);
+    const el = getPlayer() ?? new Audio();
+    el.onplaying = el.onended = el.onerror = null;
+    el.src = url;
     audio = el;
     el.playbackRate = rate;
     (el as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = true;

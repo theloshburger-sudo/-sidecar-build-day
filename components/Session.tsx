@@ -11,7 +11,7 @@ import type { AppStatus, Engine } from "./SidecarApp";
 import { applyActions, badgeSpot, boardHeight, describeBoard, emptyBoard, primsBox, BOARD_MIN_H, type BoardState, type Measure } from "@/lib/board";
 import { getDemo } from "@/lib/demo";
 import { demoReply, demoStart, type DemoState } from "@/lib/demo-engine";
-import { browserVoices, createRecognizer, isEcho, prefetchVoice, setVoiceChoice, speak, speakAsync, speechRecognitionSupported, stopSpeaking, ttsSupported } from "@/lib/speech";
+import { browserVoices, createRecognizer, isEcho, prefetchVoice, setVoiceChoice, speak, speakAsync, speechRecognitionSupported, stopSpeaking, ttsSupported, unlockAudio, warmVoices } from "@/lib/speech";
 import { DEFAULT_VOICE, NATURAL_VOICES } from "@/lib/voices";
 import { BeatBuilder, beatsFromTurn, type Beat } from "@/lib/narration";
 import { BoardStreamParser, STREAM_ERROR } from "@/lib/stream-parse";
@@ -48,6 +48,8 @@ function makeMeasure(): Measure {
     return w;
   };
 }
+
+const PREVIEW_LINE = "Hi! This is how I'll sound.";
 
 export default function Session({
   assignment,
@@ -134,7 +136,10 @@ export default function Session({
   const [browserList, setBrowserList] = useState<string[]>([]);
   const naturalOn = Boolean(status?.voice);
   const saved = prefs.voiceName || "";
-  const voiceName = saved && (naturalOn || saved.startsWith("browser:")) ? saved : naturalOn ? DEFAULT_VOICE : "";
+  // Natural voices on: only those count (an old device-voice pick falls back to the default).
+  const voiceName = naturalOn
+    ? NATURAL_VOICES.some((v) => v.id === saved) ? saved : DEFAULT_VOICE
+    : saved.startsWith("browser:") ? saved : "";
   setVoiceChoice(voiceName);
   useEffect(() => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
@@ -146,8 +151,17 @@ export default function Session({
   const pickVoice = (v: string) => {
     setPrefs({ voiceName: v });
     setVoiceChoice(v);
-    // Let the student hear who they picked (only between lines, never over Teacher mid-sentence).
-    if (!busyRef.current) speak("Hi! This is how I'll sound.", { natural: naturalOn, rate: prefs.voiceSpeed || 1 });
+    unlockAudio();
+    const name = NATURAL_VOICES.find((x) => x.id === v)?.label.split(" ·")[0] ?? v.replace(/^browser:/, "");
+    // Let the student hear who they picked. Mid-sentence, a preview would be cut off by
+    // Teacher's next line, so say who takes over instead.
+    if (busyRef.current || speakingRef.current) setNotice(`🗣️ ${name} will speak from Teacher's next line.`);
+    else speak(PREVIEW_LINE, { natural: naturalOn, rate: prefs.voiceSpeed || 1 });
+  };
+  // Opening the picker fetches every voice's preview, so picking one plays instantly.
+  const warmPreviews = () => {
+    unlockAudio();
+    if (naturalOn) warmVoices(PREVIEW_LINE, NATURAL_VOICES.map((v) => v.id));
   };
 
   const lastTutor = useMemo(() => {
@@ -856,7 +870,13 @@ export default function Session({
               {prefs.voice && (naturalOn || browserList.length > 0) && (
                 <label className="voice-pick" title="Who Teacher sounds like">
                   <span aria-hidden>🗣️</span>
-                  <select aria-label="Teacher's voice" value={voiceName || (browserList[0] ? `browser:${browserList[0]}` : "")} onChange={(e) => pickVoice(e.target.value)}>
+                  <select
+                    aria-label="Teacher's voice"
+                    value={voiceName || (browserList[0] ? `browser:${browserList[0]}` : "")}
+                    onPointerDown={warmPreviews}
+                    onFocus={warmPreviews}
+                    onChange={(e) => pickVoice(e.target.value)}
+                  >
                     {naturalOn && (
                       <optgroup label="Natural voices">
                         {NATURAL_VOICES.map((v) => (
@@ -864,7 +884,8 @@ export default function Session({
                         ))}
                       </optgroup>
                     )}
-                    {browserList.length > 0 && (
+                    {/* With natural voices available, only those are offered (device voices sound robotic). */}
+                    {!naturalOn && browserList.length > 0 && (
                       <optgroup label="This device's voices">
                         {browserList.map((n) => (
                           <option key={n} value={`browser:${n}`}>{n}</option>
