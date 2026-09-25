@@ -70,6 +70,7 @@ export default function Session({
   setPrefs,
   onBack,
   onHome,
+  onNewProblem,
 }: {
   assignment: Assignment;
   problem: Problem;
@@ -79,6 +80,8 @@ export default function Session({
   setPrefs: (p: Partial<Preferences>) => void;
   onBack: () => void;
   onHome: () => void;
+  /** Start over on a different problem right away (clears the board). */
+  onNewProblem?: (text: string) => void;
 }) {
   const demo = getDemo(assignment.demoId);
   const lesson = demo && demo.lesson.problemId === problem.id ? demo.lesson : null;
@@ -143,6 +146,8 @@ export default function Session({
   const player = useRef<{ push(a: BoardAction): void; end(turn: TutorTurn): void; flush(): void } | null>(null);
   statusRef.current = status;
   const [browserList, setBrowserList] = useState<string[]>([]);
+  const [newOpen, setNewOpen] = useState(false);
+  const [newText, setNewText] = useState("");
   // Natural voices only while the voice service actually works (not out of credits / blocked).
   const [naturalOk, setNaturalOk] = useState(naturalVoiceWorking);
   useEffect(() => onNaturalVoiceChange(setNaturalOk), []);
@@ -854,6 +859,28 @@ export default function Session({
               )}
             </div>
             <div className="board-tools">
+              {onNewProblem && engine === "live" && (
+                newOpen ? (
+                  <form
+                    className="new-problem"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const t = newText.trim();
+                      if (!t) return;
+                      stopSpeaking();
+                      onNewProblem(t);
+                    }}
+                  >
+                    <input autoFocus value={newText} onChange={(e) => setNewText(e.target.value)} placeholder="Type the new problem, e.g. What is i⁴?" aria-label="New problem" onKeyDown={(e) => e.key === "Escape" && setNewOpen(false)} />
+                    <button className="tool tool--send" type="submit" disabled={!newText.trim()}>Start</button>
+                    <button className="tool" type="button" onClick={() => setNewOpen(false)} aria-label="Cancel">✕</button>
+                  </form>
+                ) : (
+                  <button className="tool" onClick={() => setNewOpen(true)} title="Done with this one? Start a different problem">
+                    ＋ New problem
+                  </button>
+                )
+              )}
               <button className={`tool ${penMode ? "tool--on" : ""}`} onClick={() => setPenMode((v) => !v)} aria-pressed={penMode} title="Draw on the whiteboard with your mouse, finger or pen">
                 ✍️ {penMode ? "Drawing on" : "Draw"}
               </button>

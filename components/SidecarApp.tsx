@@ -81,6 +81,12 @@ export default function SidecarApp() {
         setPrefs={setPrefs}
         onBack={() => setStage("pick")}
         onHome={() => setStage("home")}
+        onNewProblem={(text) => {
+          // A fresh session on a brand-new problem, straight from the board (no trip through the menus).
+          const p: Problem = { id: `new-${Date.now()}`, title: text.length > 70 ? `${text.slice(0, 67)}…` : text, text, subject: "" };
+          setAssignment({ name: "Your problem", problems: [p] });
+          start(p, status?.live ? "live" : engine);
+        }}
       />
     );
   }
