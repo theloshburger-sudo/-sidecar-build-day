@@ -28,6 +28,15 @@ const PHASES: { id: Phase; label: string }[] = [
   { id: "wrapup", label: "Done" },
 ];
 
+/** Did Teacher's last spoken line already ask this question? (Then don't read it out twice.) */
+function alreadyAsked(lastLine: string, question: string): boolean {
+  const words = (t: string) => t.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2);
+  const said = new Set(words(lastLine));
+  const q = words(question);
+  if (!q.length) return true;
+  return q.filter((w) => said.has(w)).length / q.length >= 0.6;
+}
+
 const DRAW_SPEEDS = [0, 0.25, 0.5, 1, 1.5, 2]; // 0 = Auto (paced to the voice)
 const VOICE_SPEEDS = [0.75, 1, 1.25, 1.5];
 
@@ -270,6 +279,7 @@ export default function Session({
     let ended = false;
     let next = 0;
     let sawNarrate = false;
+    let endTurn: TutorTurn | null = null;
     let wake: (() => void) | null = null;
     const notify = () => {
       const w = wake;
@@ -299,6 +309,14 @@ export default function Session({
       if (alive()) {
         setActiveBeat(-1);
         setFocusBeat(null);
+        // Hand the turn over out loud ("Your turn: …"), like a tutor would, unless the last line already asked it.
+        const q = (endTurn as TutorTurn | null)?.question?.trim() ?? "";
+        const lastLine = beats[beats.length - 1]?.text ?? "";
+        if (q && prefsRef.current.voice && !alreadyAsked(lastLine, q)) {
+          setSpeaking(true);
+          await speakAsync(q, { rate: prefsRef.current.voiceSpeed || 1, natural: Boolean(statusRef.current?.voice) });
+          if (alive()) setSpeaking(false);
+        }
       }
     })();
 
@@ -315,6 +333,7 @@ export default function Session({
       },
       end(turn: TutorTurn) {
         if (!alive()) return;
+        endTurn = turn;
         if (!sawNarrate) {
           // The reply had no narrate steps: pair its sentences with slices of the drawing instead.
           beats = beatsFromTurn(turn);
@@ -539,7 +558,8 @@ export default function Session({
   speakingRef.current = speaking;
   busyRef.current = boardBusy;
   thinkingRef.current = thinking || streaming;
-  currentLineRef.current = activeBeat >= 0 ? beatLines[activeBeat] ?? "" : beatLines.join(" ");
+  // What Teacher is saying (incl. the question read out at the end), so hands-free doesn't take it for the student.
+  currentLineRef.current = activeBeat >= 0 ? beatLines[activeBeat] ?? "" : `${beatLines.join(" ")} ${lastTutor?.question ?? ""}`;
 
   useEffect(() => {
     if (lastTutor && lastTutor.verdict !== "none" && (lastTutor.phase === "wrapup" || lastTutor.phase === "practice") && practice) {
