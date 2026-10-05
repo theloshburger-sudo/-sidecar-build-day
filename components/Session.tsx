@@ -917,7 +917,7 @@ export default function Session({
           </div>
         </aside>
 
-        <section className="stage">
+        <section className={`stage ${screenShot ? "stage--screen" : ""}`}>
           <video ref={videoRef} className="sr-only" playsInline muted aria-hidden />
           {isScreenSession && !screenShot && (
             <div className="card screen-gate">

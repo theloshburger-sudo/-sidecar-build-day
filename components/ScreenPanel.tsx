@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { BoardAction } from "@/lib/types";
 
 export type ScreenMark = BoardAction & { beat: number };
@@ -11,18 +11,33 @@ const INK: Record<string, string> = { ink: "#1f2d3a", blue: "#1677e8", green: "#
 export default function ScreenPanel({ shot, marks, focusBeat, sharing, onStop }: { shot: string | null; marks: ScreenMark[]; focusBeat: number | null; sharing: boolean; onStop: () => void }) {
   // Marks use a 0–1000 grid on both axes; draw them in the image's real proportions so circles stay round.
   const [ratio, setRatio] = useState(9 / 16);
+  // Enlarged: the same snapshot (marks included) shown big over the page, for reading small text.
+  const [big, setBig] = useState(false);
+  useEffect(() => {
+    if (!big) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setBig(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [big]);
   if (!shot) return null;
   const H = 1000 * ratio;
   return (
-    <div className="screen-panel">
+    <>
+    {big && <div className="screen-backdrop" onClick={() => setBig(false)} aria-hidden />}
+    <div className={`screen-panel ${big ? "screen-panel--big" : ""}`} role={big ? "dialog" : undefined} aria-modal={big || undefined} aria-label={big ? "Your screen, enlarged" : undefined}>
       <div className="screen-head">
         <strong>🖥 Your screen</strong>
-        <span className="muted small">{sharing ? "Teacher sees a fresh snapshot each time you send a message." : "Sharing stopped. This is the last snapshot."}</span>
-        {sharing && (
-          <button className="link-back small" onClick={onStop}>
-            Stop sharing
+        <span className="muted small screen-note">{sharing ? "A fresh snapshot goes to Teacher with each message." : "Sharing stopped. This is the last snapshot."}</span>
+        <span className="screen-actions">
+          <button className="link-back small" onClick={() => setBig((v) => !v)} aria-pressed={big}>
+            {big ? "Close" : "Enlarge"}
           </button>
-        )}
+          {sharing && !big && (
+            <button className="link-back small" onClick={onStop}>
+              Stop sharing
+            </button>
+          )}
+        </span>
       </div>
       <div className="screen-frame">
         <img src={shot} alt="Snapshot of your shared screen" onLoad={(e) => setRatio(e.currentTarget.naturalHeight / e.currentTarget.naturalWidth || 9 / 16)} />
@@ -75,5 +90,6 @@ export default function ScreenPanel({ shot, marks, focusBeat, sharing, onStop }:
         </svg>
       </div>
     </div>
+    </>
   );
 }

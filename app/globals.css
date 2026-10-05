@@ -1598,7 +1598,7 @@ sub { top: 0.25em; }
 /* Screen-follow */
 .screen-panel { flex-shrink: 0; margin-bottom: 2px; border: 1px solid var(--line); border-radius: 16px; background: #fff; overflow: hidden; }
 .screen-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 14px; border-bottom: 1px solid var(--line); }
-.screen-head .link-back { margin-left: auto; }
+.screen-actions { margin-left: auto; display: inline-flex; gap: 14px; }
 .screen-frame { position: relative; line-height: 0; width: fit-content; max-width: 100%; margin: 0 auto; }
 .screen-frame img { display: block; max-width: 100%; max-height: 55vh; width: auto; height: auto; }
 .screen-frame svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
@@ -1612,3 +1612,43 @@ sub { top: 0.25em; }
 .screen-gate p { margin: 0; max-width: 460px; }
 @media (prefers-reduced-motion: reduce) { .screen-mark ellipse, .screen-mark rect, .screen-mark line { animation: none; stroke-dashoffset: 0; } .screen-label { animation: none; } }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Screen + whiteboard together. Side by side when there's room: the snapshot is a reference,
+   the board is where teaching happens, so the board keeps the larger column and full height. */
+.stage--screen .board-frame { min-height: 55vh; }
+.stage--screen .screen-frame img { max-height: 30vh; }
+@media (min-width: 900px) {
+  .stage--screen {
+    display: grid;
+    grid-template-columns: minmax(0, 38fr) minmax(0, 62fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    overflow: hidden;
+  }
+  .stage--screen > .screen-panel { grid-column: 1; grid-row: 1; margin: 0; min-height: 0; max-height: 100%; overflow-y: auto; align-self: start; }
+  /* The board column is narrower here: keep its toolbar to two rows (not a scroll strip: the notes pop-up opens from it). */
+  .stage--screen .board-tools { gap: 4px; }
+  .stage--screen .board-tools .speed { font-size: 12.5px; padding-left: 8px; }
+  .stage--screen .board-tools .speed button { padding: 3px 5px; }
+  .stage--screen .learner-chip > button { max-width: 190px; }
+  .stage--screen > .board-frame { grid-column: 2; grid-row: 1; min-height: 0; }
+  .stage--screen > .dock { grid-column: 1 / -1; }
+  .stage--screen .screen-frame { width: 100%; }
+  .stage--screen .screen-frame img { width: 100%; max-height: none; }
+  .stage--screen .screen-note { display: none; }
+}
+@media (min-width: 900px) and (max-width: 1199px) {
+  .stage--screen { grid-template-columns: minmax(0, 34fr) minmax(0, 66fr); }
+}
+@media (max-width: 1000px) {
+  .stage--screen { overflow: visible; }
+}
+
+/* Enlarged snapshot */
+.screen-backdrop { position: fixed; inset: 0; z-index: 49; background: rgba(31, 45, 58, 0.45); backdrop-filter: blur(3px); }
+.screen-panel--big,
+.stage--screen > .screen-panel--big { position: fixed; inset: clamp(12px, 4vh, 40px) clamp(12px, 4vw, 56px); z-index: 50; margin: 0; overflow: auto; box-shadow: 0 30px 80px rgba(31, 45, 58, 0.35); }
+.screen-panel--big .screen-frame,
+.stage--screen .screen-panel--big .screen-frame { width: fit-content; max-width: 100%; }
+.screen-panel--big .screen-frame img,
+.stage--screen .screen-panel--big .screen-frame img { width: auto; max-width: 100%; max-height: calc(100vh - 140px); }
+@media (prefers-reduced-transparency: reduce) { .screen-backdrop { backdrop-filter: none; background: rgba(31, 45, 58, 0.7); } }
