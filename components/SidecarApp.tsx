@@ -12,6 +12,8 @@ export interface AppStatus {
   videos: boolean;
   /** Natural (ElevenLabs) voice available. */
   voice?: boolean;
+  /** Canvas integration configured (CANVAS_TOKEN_KEY set). */
+  canvas?: boolean;
 }
 
 export type Engine = "live" | "demo";

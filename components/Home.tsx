@@ -5,7 +5,8 @@ import Cloud from "./Cloud";
 import TopBar, { StatusPill } from "./TopBar";
 import Account from "./Account";
 import WeakSpots from "./WeakSpots";
-import { useAccount } from "@/lib/account";
+import CanvasPanel, { type CanvasItem } from "./CanvasPanel";
+import { authFetch, useAccount } from "@/lib/account";
 import type { Recap } from "@/lib/memory";
 import type { AppStatus } from "./SidecarApp";
 import { DEMO_ASSIGNMENTS } from "@/lib/demo";
@@ -36,12 +37,7 @@ export default function Home({ status, onAssignment }: { status: AppStatus | nul
     try {
       const read = await readAssignmentFile(file, setBusy);
       setBusy(read.images.length ? "Teacher is reading the page…" : "Finding the problems…");
-      const res = await fetch("/api/extract", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: file.name, text: read.text, images: read.images }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { name?: string; problems?: Problem[]; error?: string };
+      const { res, data } = await extract(file.name, read.text, read.images);
       if (!res.ok) {
         // Server unreachable or no key: fall back to local splitting when we have text.
         if (read.text.trim()) return finish(file.name, splitProblems(read.text));
@@ -52,6 +48,34 @@ export default function Home({ status, onAssignment }: { status: AppStatus | nul
       console.error("upload failed", e);
       setBusy(null);
       setError(e instanceof FileProblem ? e.message : "Something went wrong reading that file. Try again, or paste the problem text instead.");
+    }
+  }
+
+  async function extract(name: string, text: string, images: string[] = []) {
+    const res = await fetch("/api/extract", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, text, images }),
+    });
+    const data = (await res.json().catch(() => ({}))) as { name?: string; problems?: Problem[]; error?: string };
+    return { res, data };
+  }
+
+  /** A Canvas assignment: fetch its instructions, then split them like any upload. */
+  async function openCanvas(item: CanvasItem) {
+    setError(null);
+    setBusy(`Getting “${item.name}” from Canvas…`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    try {
+      const r = await authFetch(`/api/canvas/assignment?course=${item.courseId}&id=${item.assignmentId}`);
+      const a = (await r.json().catch(() => ({}))) as { name?: string; text?: string; error?: string };
+      if (!r.ok || !a.text) throw new FileProblem(a.error || "Couldn't get that assignment from Canvas.");
+      setBusy("Finding the problems…");
+      const { res, data } = await extract(a.name || item.name, a.text);
+      finish(res.ok ? data.name || item.name : item.name, res.ok ? data.problems ?? [] : splitProblems(a.text));
+    } catch (e) {
+      setBusy(null);
+      setError(e instanceof FileProblem ? e.message : "Something went wrong getting that from Canvas. Try again.");
     }
   }
 
@@ -174,6 +198,8 @@ export default function Home({ status, onAssignment }: { status: AppStatus | nul
             </p>
           )}
         </section>
+
+        <CanvasPanel enabled={Boolean(status?.canvas)} onOpen={openCanvas} />
 
         <WeakSpots onAssignment={onAssignment} />
 

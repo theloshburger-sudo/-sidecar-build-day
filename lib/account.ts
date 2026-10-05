@@ -88,3 +88,11 @@ export async function signOut() {
 export function clearImported() {
   set({ imported: false });
 }
+
+/** fetch() with the signed-in student's token, for routes that act as them (Canvas). */
+export async function authFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const token = (await supabase?.auth.getSession())?.data.session?.access_token;
+  const headers = new Headers(init.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return fetch(url, { ...init, headers });
+}

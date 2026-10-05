@@ -1577,3 +1577,18 @@ sub { top: 0.25em; }
 .spot-ladder i.on { background: var(--ok); }
 .weak-spots .link-back { margin-top: 10px; }
 @media (max-width: 640px) { .spot-list { grid-template-columns: 1fr; } }
+
+/* Canvas */
+.canvas-panel .section-head { align-items: baseline; }
+.canvas-connect { padding: 18px 20px; display: grid; gap: 12px; max-width: 620px; }
+.canvas-connect p { margin: 0; }
+.canvas-connect label { display: grid; gap: 6px; font-weight: 700; font-size: 14px; }
+.canvas-connect input { font: inherit; font-weight: 400; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--soft); color: var(--ink); }
+.canvas-steps { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: 14px; }
+.canvas-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.canvas-item { padding: 14px 16px; display: grid; gap: 6px; align-content: start; }
+.canvas-item .tag { justify-self: start; }
+.canvas-due { font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.canvas-due--late { color: var(--bad); }
+.canvas-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+@media (max-width: 640px) { .canvas-list { grid-template-columns: 1fr; } }
