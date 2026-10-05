@@ -149,19 +149,33 @@ export default function Session({
     streamRef.current = null;
     setSharing(false);
   }, []);
-  useEffect(() => () => stopScreenShare(streamRef.current), []);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      stopScreenShare(streamRef.current);
+    };
+  }, []);
   const startSharing = useCallback(async (): Promise<boolean> => {
     setShareError(null);
     if (!videoRef.current) return false;
+    stopScreenShare(streamRef.current); // a second Share replaces the first, never orphans it
+    streamRef.current = null;
     try {
       const stream = await startScreenShare(videoRef.current);
+      // The student may have left the session while the browser's picker was open.
+      if (!mounted.current) {
+        stopScreenShare(stream);
+        return false;
+      }
       streamRef.current = stream;
       stream.getVideoTracks()[0]?.addEventListener("ended", stopSharing);
       setSharing(true);
       return true;
     } catch (e) {
       // Cancelling the browser's picker isn't an error worth shouting about.
-      if ((e as Error)?.name !== "NotAllowedError") setShareError("Couldn't share your screen. Try again, or use Chrome or Edge on a computer.");
+      if ((e as Error)?.name !== "NotAllowedError" && mounted.current) setShareError("Couldn't share your screen. Try again, or use Chrome or Edge on a computer.");
       return false;
     }
   }, [stopSharing]);
@@ -169,12 +183,29 @@ export default function Session({
   const grabFrame = (): string | undefined => {
     if (!streamRef.current || !videoRef.current) return undefined;
     const shot = captureFrame(videoRef.current);
-    if (!shot) return undefined;
+    if (!shot) {
+      setShareError("Teacher couldn't see your screen just now. Stop sharing and share again.");
+      return undefined;
+    }
+    setShareError(null);
     setScreenShot(shot);
     setScreenMarks([]);
     return shot;
   };
-  const remember = (p: Promise<unknown> | undefined) => void p?.catch((e) => console.warn("memory write failed", e));
+  /** Save to memory. Writes are idempotent per session id, so one retry is safe; if it still fails, say so. */
+  const remember = (write: (() => Promise<unknown> | undefined) | null, onFail?: () => void) => {
+    if (!write) return;
+    const attempt = () => write() ?? Promise.resolve();
+    attempt()
+      .catch(() => new Promise((r) => setTimeout(r, 1500)).then(attempt))
+      .catch((e) => {
+        console.warn("memory write failed", e);
+        onFail?.();
+        setNotice("Couldn't save your progress just now. Check your connection.");
+      });
+  };
+  const warmupId = useRef<string | null>(null);
+  const warmupGraded = useRef(false);
 
   const wb = useRef<WhiteboardHandle>(null);
   const board = useRef<BoardState>(emptyBoard());
@@ -462,19 +493,26 @@ export default function Session({
     if (warmupPending.current && turn.phase !== "warmup") {
       warmupPending.current = false;
       gradingWarmup = true;
-      if (review && turn.verdict !== "none") {
+      if (review && turn.verdict !== "none" && mem) {
         const hit = turn.verdict === "correct";
-        remember(mem?.recordSession({ id: newId(), title: `Warm-up: ${review.label}`, subject: review.subject, concept: review, event: hit ? "hit" : "miss", result: hit ? "Warm-up ✓" : "Warm-up: needs another look" }));
+        warmupGraded.current = true;
+        const id = (warmupId.current ??= newId());
+        remember(() => mem.recordSession({ id, title: `Warm-up: ${review.label}`, subject: review.subject, concept: review, event: hit ? "hit" : "miss", result: hit ? "Warm-up ✓" : "Warm-up: needs another look" }));
       }
     }
     if (turn.phase === "warmup") warmupPending.current = true;
     // The idea this session is really about: a miss, so it comes back for review in 2 days.
     const c = turn.concept;
-    if (c?.slug && !lesson && !conceptRecorded.current && turn.phase !== "warmup" && !(gradingWarmup && c.slug === review?.slug)) {
+    // (The warm-up concept itself is already scored by the warm-up; a later turn naming it again isn't a new miss.)
+    const isWarmupConcept = c?.slug === review?.slug && (gradingWarmup || warmupGraded.current);
+    if (c?.slug && mem && !lesson && !conceptRecorded.current && turn.phase !== "warmup" && !isWarmupConcept) {
       conceptRecorded.current = true;
-      const ref = { ...c, subject: problem.subject || review?.subject || "" };
+      const ref = { ...c, subject: problem.subject || "" };
       if (!conceptsRef.current.some((k) => k.slug === c.slug)) conceptsRef.current = [{ slug: c.slug, label: c.label }, ...conceptsRef.current];
-      remember(mem?.recordSession({ id: sessionId.current, title: problem.title, subject: ref.subject, gap: turn.gap, concept: ref, event: "miss" }));
+      remember(
+        () => mem.recordSession({ id: sessionId.current, title: problem.title, subject: ref.subject, gap: turn.gap, concept: ref, event: "miss" }),
+        () => (conceptRecorded.current = false), // let the next turn try again
+      );
     }
     if (turn.plan.length) setPlan(turn.plan);
     if (turn.gap) setGap(turn.gap);
@@ -623,11 +661,15 @@ export default function Session({
     if (document.fonts && fam) {
       Promise.race([document.fonts.load(`30px ${fam}`).catch(() => null), new Promise((r) => setTimeout(r, 1500))]).finally(go);
     } else go();
-    return () => {
+  }, [askTutor, initialEngine, account.ready]);
+  // Unmount only: re-running the start effect (deps change) must not cut Teacher off mid-sentence.
+  useEffect(
+    () => () => {
       stopSpeaking();
       recognizer.current?.abort();
-    };
-  }, [askTutor, initialEngine, account.ready]);
+    },
+    [],
+  );
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
@@ -641,7 +683,8 @@ export default function Session({
   // Remember finished sessions (same session id, so a later practice result updates it in place).
   useEffect(() => {
     if (lastTutor?.phase !== "wrapup" || lesson) return;
-    remember(memoryRef.current?.recordSession({ id: sessionId.current, title: problem.title, subject: problem.subject, gap, result: practiceResult ?? "Finished" }));
+    const mem = memoryRef.current;
+    if (mem) remember(() => mem.recordSession({ id: sessionId.current, title: problem.title, subject: problem.subject, gap, result: practiceResult ?? "Finished" }));
   }, [lastTutor, problem, gap, practiceResult, lesson]);
 
   // ---------------------------------------------------------------- student input
@@ -1052,8 +1095,11 @@ export default function Session({
                       <button
                         className="link-back small"
                         onClick={() => {
-                          remember(memoryRef.current?.forgetNotes());
-                          setLearner([]);
+                          // Only clear the list once the delete actually worked.
+                          memoryRef.current
+                            ?.forgetNotes()
+                            .then(() => setLearner([]))
+                            .catch(() => setNotice("Couldn't forget those notes just now. Try again."));
                         }}
                       >
                         Forget all

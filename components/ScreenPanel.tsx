@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { BoardAction } from "@/lib/types";
 
 export type ScreenMark = BoardAction & { beat: number };
@@ -13,9 +13,23 @@ export default function ScreenPanel({ shot, marks, focusBeat, sharing, onStop }:
   const [ratio, setRatio] = useState(9 / 16);
   // Enlarged: the same snapshot (marks included) shown big over the page, for reading small text.
   const [big, setBig] = useState(false);
+  const openBtn = useRef<HTMLButtonElement>(null);
+  const closeBtn = useRef<HTMLButtonElement>(null);
+  const wasBig = useRef(false);
   useEffect(() => {
+    // Focus goes into the enlarged view and back to "Enlarge" when it closes.
+    if (big) closeBtn.current?.focus();
+    else if (wasBig.current) openBtn.current?.focus();
+    wasBig.current = big;
     if (!big) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setBig(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setBig(false);
+      // Only one control inside: keep Tab on it instead of wandering into the page behind.
+      if (e.key === "Tab") {
+        e.preventDefault();
+        closeBtn.current?.focus();
+      }
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [big]);
@@ -29,9 +43,15 @@ export default function ScreenPanel({ shot, marks, focusBeat, sharing, onStop }:
         <strong>🖥 Your screen</strong>
         <span className="muted small screen-note">{sharing ? "A fresh snapshot goes to Teacher with each message." : "Sharing stopped. This is the last snapshot."}</span>
         <span className="screen-actions">
-          <button className="link-back small" onClick={() => setBig((v) => !v)} aria-pressed={big}>
-            {big ? "Close" : "Enlarge"}
-          </button>
+          {big ? (
+            <button ref={closeBtn} className="link-back small" onClick={() => setBig(false)}>
+              Close
+            </button>
+          ) : (
+            <button ref={openBtn} className="link-back small" onClick={() => setBig(true)}>
+              Enlarge
+            </button>
+          )}
           {sharing && !big && (
             <button className="link-back small" onClick={onStop}>
               Stop sharing

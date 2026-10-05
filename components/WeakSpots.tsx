@@ -30,14 +30,21 @@ export function reviewAssignment(c: Concept): Assignment {
 }
 
 export default function WeakSpots({ onAssignment }: { onAssignment: (a: Assignment) => void }) {
-  const { memory } = useAccount();
+  const { memory, version } = useAccount();
   const [concepts, setConcepts] = useState<Concept[]>([]);
   const [showMastered, setShowMastered] = useState(false);
   const [now] = useState(() => Date.now());
 
   useEffect(() => {
-    memory?.concepts().then(setConcepts).catch((e) => console.warn("couldn't load weak spots", e));
-  }, [memory]);
+    let live = true; // a slower, older load must not overwrite a newer one
+    memory
+      ?.concepts()
+      .then((c) => live && setConcepts(c))
+      .catch((e) => console.warn("couldn't load weak spots", e));
+    return () => {
+      live = false;
+    };
+  }, [memory, version]);
 
   if (!concepts.length) return null;
   const byDue = (a: Concept, b: Concept) => (a.nextReviewAt ?? "9").localeCompare(b.nextReviewAt ?? "9");

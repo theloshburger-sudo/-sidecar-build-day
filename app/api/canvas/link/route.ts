@@ -8,7 +8,9 @@ export const runtime = "nodejs";
 export async function GET(req: Request) {
   const ctx = await withUser(req);
   if ("error" in ctx) return ctx.error;
-  const { data } = await ctx.db.from("sidecar_canvas_links").select("base_url").maybeSingle();
+  const { data, error } = await ctx.db.from("sidecar_canvas_links").select("base_url").maybeSingle();
+  // A database hiccup must not look like "not connected" (the student would paste their token again).
+  if (error) return NextResponse.json({ error: "Couldn't check your Canvas connection. Try again." }, { status: 500 });
   return NextResponse.json({ linked: Boolean(data), baseUrl: data?.base_url ?? null });
 }
 
