@@ -37,6 +37,7 @@ function toTurn(d: DemoTurn, extra: Partial<TutorTurn> = {}, prefix = "", suffix
     practice: d.practice ?? "",
     verdict: "none",
     insight: d.insight ?? "",
+    concept: { slug: "", label: "" },
     ...extra,
     board,
     say,

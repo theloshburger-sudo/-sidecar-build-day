@@ -4,6 +4,7 @@ import { MODEL, friendlyError, getClient, hasKey, rateLimited, retryable } from 
 import { PROMPTED_FORMAT, TUTOR_SYSTEM, toMessages } from "@/lib/prompt";
 import { tutorTurnSchema } from "@/lib/schema";
 import { STREAM_ERROR } from "@/lib/stream-parse";
+import { normalizeConcept } from "@/lib/sanitize";
 import type { TutorRequest } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -65,6 +66,8 @@ export async function POST(req: Request) {
       .filter((n): n is string => typeof n === "string")
       .map((n) => n.slice(0, 120))
       .slice(0, 12),
+    (Array.isArray(body.concepts) ? body.concepts : []).slice(0, 30).map(normalizeConcept).filter((c) => c.slug),
+    normalizeConcept(body.review).slug ? normalizeConcept(body.review) : undefined,
   ) as Anthropic.MessageParam[];
   const schema = tutorTurnSchema as unknown as Record<string, unknown>;
   const haiku = /haiku/i.test(MODEL);
