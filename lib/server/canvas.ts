@@ -4,7 +4,8 @@
 
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { lookup as dnsLookup } from "node:dns/promises";
-import { isIP } from "node:net";
+import { request } from "node:https";
+import { BlockList, isIP, type LookupFunction } from "node:net";
 
 // ---------------------------------------------------------------- token encryption
 
@@ -14,18 +15,20 @@ function keyBytes(keyB64: string): Buffer {
   return k;
 }
 
-/** AES-256-GCM. Output: "v1:" + base64(iv | tag | ciphertext). */
-export function encryptToken(token: string, keyB64: string): string {
+/** AES-256-GCM, bound to its owner (user id as associated data). Output: "v1:" + base64(iv | tag | ciphertext). */
+export function encryptToken(token: string, keyB64: string, owner: string): string {
   const iv = randomBytes(12);
   const c = createCipheriv("aes-256-gcm", keyBytes(keyB64), iv);
+  c.setAAD(Buffer.from(owner, "utf8"));
   const ct = Buffer.concat([c.update(token, "utf8"), c.final()]);
   return "v1:" + Buffer.concat([iv, c.getAuthTag(), ct]).toString("base64");
 }
 
-export function decryptToken(box: string, keyB64: string): string {
+export function decryptToken(box: string, keyB64: string, owner: string): string {
   if (!box.startsWith("v1:")) throw new Error("Unknown token format");
   const raw = Buffer.from(box.slice(3), "base64");
   const d = createDecipheriv("aes-256-gcm", keyBytes(keyB64), raw.subarray(0, 12));
+  d.setAAD(Buffer.from(owner, "utf8"));
   d.setAuthTag(raw.subarray(12, 28));
   return Buffer.concat([d.update(raw.subarray(28)), d.final()]).toString("utf8");
 }
@@ -35,14 +38,21 @@ export function decryptToken(box: string, keyB64: string): string {
 type Lookup = (host: string) => Promise<string[]>;
 const defaultLookup: Lookup = async (host) => (await dnsLookup(host, { all: true })).map((a) => a.address);
 
-function isPrivate(ip: string): boolean {
-  const v4 = ip.startsWith("::ffff:") ? ip.slice(7) : ip;
-  if (isIP(v4) === 4) {
-    const [a, b] = v4.split(".").map(Number);
-    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224;
-  }
-  const s = ip.toLowerCase();
-  return s === "::" || s === "::1" || s.startsWith("fc") || s.startsWith("fd") || s.startsWith("fe8") || s.startsWith("fe9") || s.startsWith("fea") || s.startsWith("feb");
+// Everything that isn't plain public unicast. IPv6 forms that can carry an IPv4 address
+// (mapped, compatible, NAT64, 6to4) are blocked wholesale: no Canvas host needs them.
+// Two lists: a single BlockList also matches IPv4 addresses against IPv6 rules (via ::ffff:a.b.c.d),
+// so blocking the mapped range there would block every IPv4 address.
+const blocked4 = new BlockList();
+const blocked6 = new BlockList();
+for (const [net, bits] of [["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8], ["169.254.0.0", 16], ["172.16.0.0", 12], ["192.0.0.0", 24], ["192.0.2.0", 24], ["192.168.0.0", 16], ["198.18.0.0", 15], ["198.51.100.0", 24], ["203.0.113.0", 24], ["224.0.0.0", 3]] as const)
+  blocked4.addSubnet(net, bits, "ipv4");
+for (const [net, bits] of [["::", 96], ["::ffff:0:0", 96], ["64:ff9b::", 96], ["64:ff9b:1::", 48], ["100::", 64], ["2001:db8::", 32], ["2002::", 16], ["fc00::", 7], ["fe80::", 10], ["fec0::", 10], ["ff00::", 8]] as const)
+  blocked6.addSubnet(net, bits, "ipv6");
+
+export function isPrivate(ip: string): boolean {
+  const v = isIP(ip);
+  if (!v) return true;
+  return v === 4 ? blocked4.check(ip, "ipv4") : blocked6.check(ip, "ipv6");
 }
 
 export class CanvasError extends Error {
@@ -51,11 +61,7 @@ export class CanvasError extends Error {
   }
 }
 
-/**
- * Returns the normalized origin ("https://canvas.school.edu") or throws.
- * ponytail: checked again before every request, but a DNS answer can still change between the check
- * and the fetch (rebinding). Pin the resolved IP with a custom agent if this ever faces untrusted volume.
- */
+/** Returns the normalized origin ("https://canvas.school.edu") or throws. canvasGet re-checks at connect time. */
 export async function assertSafeBaseUrl(raw: string, lookup: Lookup = defaultLookup): Promise<string> {
   const bad = (why: string) => new CanvasError(`That Canvas address won't work: ${why}. It should look like https://canvas.yourschool.edu`, 400, "bad_url");
   let u: URL;
@@ -81,23 +87,60 @@ export async function assertSafeBaseUrl(raw: string, lookup: Lookup = defaultLoo
 
 // ---------------------------------------------------------------- API calls
 
+/**
+ * DNS lookup used for the actual connection: the address we connect to is the one we checked,
+ * so a DNS answer that flips to an internal address after assertSafeBaseUrl (rebinding) is refused.
+ */
+const safeLookup: LookupFunction = (hostname, options, callback) => {
+  dnsLookup(hostname, { all: true }).then(
+    (addrs) => {
+      if (!addrs.length || addrs.some((a) => isPrivate(a.address))) return callback(Object.assign(new Error("blocked address"), { code: "EBLOCKED" }), "", 4);
+      if (options.all) (callback as unknown as (e: null, a: typeof addrs) => void)(null, addrs);
+      else callback(null, addrs[0].address, addrs[0].family);
+    },
+    (err) => callback(err, "", 4),
+  );
+};
+
+const MAX_BODY = 5_000_000;
+
+/** GET over https with the connect-time address check. Never follows redirects. */
+function httpsGet(url: string, token: string): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const req = request(url, { method: "GET", lookup: safeLookup, timeout: 15_000, headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } }, (res) => {
+      let size = 0;
+      const chunks: Buffer[] = [];
+      res.on("data", (c: Buffer) => {
+        size += c.length;
+        if (size > MAX_BODY) req.destroy(new Error("response too large"));
+        else chunks.push(c);
+      });
+      res.on("end", () => resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString("utf8") }));
+      res.on("error", reject);
+    });
+    req.on("timeout", () => req.destroy(new Error("timeout")));
+    req.on("error", reject);
+    req.end();
+  });
+}
+
 export async function canvasGet<T>(base: string, token: string, path: string): Promise<T> {
   const origin = await assertSafeBaseUrl(base);
-  let res: Response;
+  let res: { status: number; body: string };
   try {
-    res = await fetch(origin + path, {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-      redirect: "error", // never follow Canvas somewhere else
-      signal: AbortSignal.timeout(15_000),
-      cache: "no-store",
-    });
+    res = await httpsGet(origin + path, token);
   } catch {
     throw new CanvasError("Canvas didn't answer. Check the address, or try again in a minute.", 502, "unreachable");
   }
+  if (res.status >= 300 && res.status < 400) throw new CanvasError("Canvas tried to send us somewhere else. Check the address (it should be your school's Canvas site).", 502, "redirect");
   if (res.status === 401) throw new CanvasError("Canvas didn't accept your token (it may have expired). Reconnect Canvas with a new token.", 401, "token_rejected");
   if (res.status === 403 || res.status === 404) throw new CanvasError("Canvas wouldn't show that assignment. It may be locked or unpublished.", 404, "not_found");
-  if (!res.ok) throw new CanvasError(`Canvas had a problem (error ${res.status}). Try again in a minute.`, 502, "upstream");
-  return (await res.json()) as T;
+  if (res.status < 200 || res.status >= 300) throw new CanvasError(`Canvas had a problem (error ${res.status}). Try again in a minute.`, 502, "upstream");
+  try {
+    return JSON.parse(res.body) as T;
+  } catch {
+    throw new CanvasError("That doesn't look like a Canvas site. Check the address.", 502, "not_canvas");
+  }
 }
 
 export interface CanvasItem {

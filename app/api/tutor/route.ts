@@ -35,6 +35,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Slow down a little — too many requests. Try again in a minute." }, { status: 429 });
   }
 
+  // Two screenshots at most (board ink + shared screen): refuse anything bigger before parsing it.
+  if (Number(req.headers.get("content-length") ?? 0) > 7_000_000) {
+    return NextResponse.json({ error: "That message is too large to send. Try again." }, { status: 413 });
+  }
   let body: TutorRequest;
   try {
     body = (await req.json()) as TutorRequest;

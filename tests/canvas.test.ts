@@ -1,15 +1,24 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { assertSafeBaseUrl, decryptToken, encryptToken, htmlToText, mapPlanner } from "../lib/server/canvas";
+import { assertSafeBaseUrl, decryptToken, encryptToken, htmlToText, isPrivate, mapPlanner } from "../lib/server/canvas";
 
 const KEY = Buffer.alloc(32, 7).toString("base64");
 
-test("token encryption round-trips and can't be read with another key", () => {
-  const box = encryptToken("1234~secretCanvasToken", KEY);
+test("token encryption round-trips, is bound to its owner, and can't be read with another key", () => {
+  const box = encryptToken("1234~secretCanvasToken", KEY, "user-a");
   assert.ok(!box.includes("secretCanvasToken"));
-  assert.equal(decryptToken(box, KEY), "1234~secretCanvasToken");
-  assert.throws(() => decryptToken(box, Buffer.alloc(32, 8).toString("base64")));
-  assert.notEqual(encryptToken("same", KEY), encryptToken("same", KEY)); // fresh IV each time
+  assert.equal(decryptToken(box, KEY, "user-a"), "1234~secretCanvasToken");
+  assert.throws(() => decryptToken(box, KEY, "user-b")); // copied into someone else's row: useless
+  assert.throws(() => decryptToken(box, Buffer.alloc(32, 8).toString("base64"), "user-a"));
+  assert.notEqual(encryptToken("same", KEY, "u"), encryptToken("same", KEY, "u")); // fresh IV each time
+});
+
+test("internal addresses are blocked in every spelling, public ones allowed", () => {
+  for (const ip of ["127.0.0.1", "10.1.2.3", "172.20.0.1", "192.168.1.1", "169.254.169.254", "100.64.0.1", "198.18.0.1", "192.0.0.8", "0.0.0.0", "224.0.0.1",
+    "::1", "::", "fd00::1", "fe80::1", "fec0::1", "::ffff:127.0.0.1", "::ffff:7f00:1", "::ffff:a9fe:a9fe", "64:ff9b::7f00:1", "::127.0.0.1", "2002:7f00:1::", "ff02::1"]) {
+    assert.ok(isPrivate(ip), ip);
+  }
+  for (const ip of ["52.10.1.2", "8.8.8.8", "2606:4700:4700::1111"]) assert.ok(!isPrivate(ip), ip);
 });
 
 test("only public https Canvas hosts are allowed (SSRF guard)", async () => {

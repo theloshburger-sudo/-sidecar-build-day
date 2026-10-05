@@ -22,7 +22,7 @@ export async function withCanvas(req: Request) {
   if (error) return { error: NextResponse.json({ error: "Couldn't load your Canvas link. Try again." }, { status: 500 }) };
   if (!data) return { error: NextResponse.json({ error: "Connect Canvas first.", code: "not_linked" }, { status: 404 }) };
   try {
-    return { ...auth, link: { baseUrl: data.base_url as string, token: decryptToken(data.token_ciphertext as string, canvasKey()) } };
+    return { ...auth, link: { baseUrl: data.base_url as string, token: decryptToken(data.token_ciphertext as string, canvasKey(), auth.user.id) } };
   } catch {
     return { error: NextResponse.json({ error: "Your saved Canvas token can't be read anymore. Reconnect Canvas.", code: "token_rejected" }, { status: 401 }) };
   }
