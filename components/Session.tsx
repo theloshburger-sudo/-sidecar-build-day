@@ -180,7 +180,7 @@ export default function Session({
     }
   }, [stopSharing]);
   /** A fresh frame for the next message; Teacher's old marks are cleared because the screen moved on. */
-  const grabFrame = (): string | undefined => {
+  const grabFrame = (): { url: string; w: number; h: number } | undefined => {
     if (!streamRef.current || !videoRef.current) return undefined;
     const shot = captureFrame(videoRef.current);
     if (!shot) {
@@ -188,7 +188,7 @@ export default function Session({
       return undefined;
     }
     setShareError(null);
-    setScreenShot(shot);
+    setScreenShot(shot.url);
     setScreenMarks([]);
     return shot;
   };
@@ -551,7 +551,7 @@ export default function Session({
   );
 
   const askTutor = useCallback(
-    async (text: string | null, useEngine: Engine, image?: string, screen?: string) => {
+    async (text: string | null, useEngine: Engine, image?: string, screenShot?: { url: string; w: number; h: number }) => {
       setError(null);
       if (useEngine === "demo") return runDemo(text);
       setThinking(true);
@@ -569,7 +569,8 @@ export default function Session({
             boardSummary: describeBoard(board.current),
             studentMessage: text ?? "",
             image,
-            screen,
+            screen: screenShot?.url,
+            screenSize: screenShot ? { w: screenShot.w, h: screenShot.h } : undefined,
             learner: learnerRef.current,
             concepts: conceptsRef.current.slice(0, 30),
             review: reviewRef.current ? { slug: reviewRef.current.slug, label: reviewRef.current.label } : undefined,

@@ -45,17 +45,18 @@ test("screen: the shared-screen frame is attached as its own labeled image, alon
   const p = { id: "screen", title: "My screen", text: "Help with what's on my screen", subject: "" };
   const prefs = { format: "visual", voice: false, focus: false, pace: "normal", speed: 1, voiceSpeed: 1 } as const;
   const png = "data:image/jpeg;base64,AAAA";
-  const msgs = toMessages(p, prefs, [], "(empty)", "what does this button do?", png, [], [], undefined, png);
+  const msgs = toMessages(p, prefs, [], "(empty)", "what does this button do?", png, [], [], undefined, png, { w: 1456, h: 819 });
   const last = msgs.at(-1)!.content as { type: string; text?: string }[];
   assert.equal(last.filter((c) => c.type === "image").length, 2);
   assert.match(last.at(-1)!.text!, /shared screen/i);
+  assert.match(last.at(-1)!.text!, /1456×819 pixels/);
   const onlyScreen = toMessages(p, prefs, [], "", "hi", undefined, [], [], undefined, png).at(-1)!.content as { type: string; text?: string }[];
   assert.equal(onlyScreen.filter((c) => c.type === "image").length, 1);
   assert.doesNotMatch(onlyScreen.at(-1)!.text!, /GREEN ink/);
 });
 
-test("screenMark coordinates are clamped to the 0–1000 grid", async () => {
+test("screenMark pixel coordinates are rounded and kept in range", async () => {
   const { normalizeScreenMark } = await import("../lib/sanitize");
-  assert.deepEqual(normalizeScreenMark({ type: "screenMark", kind: "circle", x: 1500, y: -20, x2: 0, y2: 0, text: "this", color: "red" }), { type: "screenMark", kind: "circle", x: 1000, y: 0, x2: 0, y2: 0, text: "this", color: "red" });
+  assert.deepEqual(normalizeScreenMark({ type: "screenMark", kind: "box", x: 412.6, y: -20, x2: 9000, y2: 300, text: "this", color: "red" }), { type: "screenMark", kind: "box", x: 413, y: 0, x2: 4000, y2: 300, text: "this", color: "red" });
   assert.equal(normalizeScreenMark({ type: "screenMark", kind: "laser", x: 1, y: 1 }).kind, "circle");
 });

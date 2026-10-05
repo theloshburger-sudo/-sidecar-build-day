@@ -7,10 +7,12 @@ export type ScreenMark = BoardAction & { beat: number };
 
 const INK: Record<string, string> = { ink: "#1f2d3a", blue: "#1677e8", green: "#17936a", red: "#e0452b", purple: "#7a5af0", orange: "#e57b12" };
 
-/** The frame Teacher is looking at, with its marks drawn over it on a 0–1000 grid. */
+/**
+ * The frame Teacher is looking at, with its marks drawn over it. Marks are in the screenshot's own
+ * pixels (the size Teacher was told), so the overlay uses the image's natural size as its viewBox.
+ */
 export default function ScreenPanel({ shot, marks, focusBeat, sharing, onStop }: { shot: string | null; marks: ScreenMark[]; focusBeat: number | null; sharing: boolean; onStop: () => void }) {
-  // Marks use a 0–1000 grid on both axes; draw them in the image's real proportions so circles stay round.
-  const [ratio, setRatio] = useState(9 / 16);
+  const [size, setSize] = useState({ w: 1456, h: 819 });
   // Enlarged: the same snapshot (marks included) shown big over the page, for reading small text.
   const [big, setBig] = useState(false);
   const openBtn = useRef<HTMLButtonElement>(null);
@@ -34,7 +36,32 @@ export default function ScreenPanel({ shot, marks, focusBeat, sharing, onStop }:
     return () => window.removeEventListener("keydown", onKey);
   }, [big]);
   if (!shot) return null;
-  const H = 1000 * ratio;
+  const { w: W, h: H } = size;
+  const clampX = (v: number | undefined) => Math.max(0, Math.min(W, v ?? 0));
+  const clampY = (v: number | undefined) => Math.max(0, Math.min(H, v ?? 0));
+  // Sizes scale with the screenshot, so marks look the same in the small panel and when enlarged.
+  const r = W * 0.018;
+  const font = W * 0.0165;
+
+  /** A small pill label beside the mark, kept inside the image and off the spot itself. */
+  const label = (text: string | undefined, ax: number, ay: number, color: string, beside = false) => {
+    if (!text) return null;
+    const tw = text.length * font * 0.56 + font;
+    const th = font * 1.5;
+    const gap = W * 0.006;
+    // Beside (boxes): just right of the box, centered on it; flips to the left edge if there's no room.
+    const lx = beside ? (ax + gap + tw <= W ? ax + gap : Math.max(2, ax - tw - gap)) : Math.min(Math.max(ax + r * 1.1, 2), W - tw - 2);
+    const ly = beside ? Math.min(Math.max(ay - th / 2, 2), H - th - 2) : ay - r * 1.1 - th < 2 ? ay + r * 1.1 : ay - r * 1.1 - th;
+    return (
+      <g className="screen-label">
+        <rect x={lx} y={ly} width={tw} height={th} rx={th / 2} fill="#fff" stroke={color} strokeWidth={W * 0.0012} />
+        <text x={lx + tw / 2} y={ly + th / 2} fontSize={font} fill={color} textAnchor="middle" dominantBaseline="central">
+          {text}
+        </text>
+      </g>
+    );
+  };
+
   return (
     <>
     {big && <div className="screen-backdrop" onClick={() => setBig(false)} aria-hidden />}
@@ -60,50 +87,43 @@ export default function ScreenPanel({ shot, marks, focusBeat, sharing, onStop }:
         </span>
       </div>
       <div className="screen-frame">
-        <img src={shot} alt="Snapshot of your shared screen" onLoad={(e) => setRatio(e.currentTarget.naturalHeight / e.currentTarget.naturalWidth || 9 / 16)} />
-        <svg viewBox={`0 0 1000 ${H}`} aria-hidden>
+        <img src={shot} alt="Snapshot of your shared screen" onLoad={(e) => e.currentTarget.naturalWidth && setSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} />
+        <svg viewBox={`0 0 ${W} ${H}`} aria-hidden>
           <defs>
-            <marker id="screen-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+            <marker id="screen-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
               <path d="M0,0 L10,5 L0,10 z" fill="context-stroke" />
             </marker>
           </defs>
           {marks.map((m, i) => {
             const c = INK[m.color ?? "red"] ?? INK.red;
             const cls = `screen-mark ${m.beat === focusBeat ? "screen-mark--now" : ""}`;
-            const x = m.x ?? 0;
-            const y = (m.y ?? 0) * ratio;
-            const y2 = (m.y2 ?? 0) * ratio;
-            const label = m.text ? (
-              <text x={Math.min(x + 4, 930)} y={Math.max(y - 26, 24)} className="screen-label" fill={c}>
-                {m.text}
-              </text>
-            ) : null;
-            if (m.kind === "box")
+            const x = clampX(m.x);
+            const y = clampY(m.y);
+            const x2 = clampX(m.x2);
+            const y2 = clampY(m.y2);
+            if (m.kind === "box") {
+              const bx = Math.min(x, x2);
+              const by = Math.min(y, y2);
+              const pad = W * 0.004;
               return (
                 <g key={i} className={cls}>
-                  <rect x={Math.min(x, m.x2 ?? x)} y={Math.min(y, y2)} width={Math.abs((m.x2 ?? x) - x) || 40} height={Math.abs(y2 - y) || 40} rx="8" stroke={c} pathLength={1} />
-                  {label}
+                  <rect x={bx - pad} y={by - pad} width={Math.max(Math.abs(x2 - x), r) + pad * 2} height={Math.max(Math.abs(y2 - y), r * 0.8) + pad * 2} rx={W * 0.004} stroke={c} pathLength={1} />
+                  {label(m.text, Math.max(x, x2) + pad, (y + y2) / 2, c, true)}
                 </g>
               );
+            }
             if (m.kind === "arrow")
               return (
                 <g key={i} className={cls}>
-                  <line x1={x} y1={y} x2={m.x2 ?? x} y2={y2} stroke={c} markerEnd="url(#screen-arrow)" pathLength={1} />
-                  {label}
+                  <line x1={x} y1={y} x2={x2} y2={y2} stroke={c} markerEnd="url(#screen-arrow)" pathLength={1} />
+                  {label(m.text, x, y, c)}
                 </g>
               );
-            if (m.kind === "label")
-              return (
-                <g key={i} className={cls}>
-                  <text x={x} y={y} className="screen-label" fill={c}>
-                    {m.text}
-                  </text>
-                </g>
-              );
+            if (m.kind === "label") return <g key={i} className={cls}>{label(m.text, x - r * 1.1, y + r * 1.1, c)}</g>;
             return (
               <g key={i} className={cls}>
-                <ellipse cx={x} cy={y} rx="40" ry="40" stroke={c} pathLength={1} />
-                {label}
+                <ellipse cx={x} cy={y} rx={r * 1.6} ry={r} stroke={c} pathLength={1} />
+                {label(m.text, x + r * 0.6, y, c)}
               </g>
             );
           })}
