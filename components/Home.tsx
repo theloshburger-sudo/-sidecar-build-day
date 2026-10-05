@@ -7,6 +7,7 @@ import Account from "./Account";
 import WeakSpots from "./WeakSpots";
 import CanvasPanel, { type CanvasItem } from "./CanvasPanel";
 import { authFetch, useAccount } from "@/lib/account";
+import { screenShareSupported } from "@/lib/screen";
 import type { Recap } from "@/lib/memory";
 import type { AppStatus } from "./SidecarApp";
 import { DEMO_ASSIGNMENTS } from "@/lib/demo";
@@ -24,6 +25,8 @@ export default function Home({ status, onAssignment }: { status: AppStatus | nul
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { memory } = useAccount();
+  const [canShare, setCanShare] = useState(false);
+  useEffect(() => setCanShare(screenShareSupported()), []);
   useEffect(() => {
     memory
       ?.recaps()
@@ -175,6 +178,19 @@ export default function Home({ status, onAssignment }: { status: AppStatus | nul
                 <button className="btn btn--ghost" onClick={() => setPasteOpen((v) => !v)}>
                   {pasteOpen ? "Hide text box" : "Paste a problem instead"}
                 </button>
+                {canShare && status?.live && (
+                  <button
+                    className="btn btn--ghost"
+                    onClick={() =>
+                      onAssignment({
+                        name: "Your screen",
+                        problems: [{ id: "screen", title: "What's on my screen", text: "I'm sharing my screen. Help me with the problem that's on it.", subject: "" }],
+                      })
+                    }
+                  >
+                    🖥 Help with what&apos;s on my screen
+                  </button>
+                )}
               </div>
               {pasteOpen && (
                 <div className="paste">

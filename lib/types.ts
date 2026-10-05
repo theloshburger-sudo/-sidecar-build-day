@@ -31,6 +31,7 @@ export type BoardActionType =
   | "mindmap"
   | "add"
   | "pointTo"
+  | "screenMark"
   | "narrate"
   | "askQuestion"
   | "clear";
@@ -163,4 +164,6 @@ export interface TutorRequest {
   concepts?: ConceptKey[];
   /** One concept due for spaced review: Teacher opens with a one-question warm-up on it. */
   review?: ConceptKey;
+  /** JPEG data URL of the student's shared screen right now (screen-follow). */
+  screen?: string;
 }

@@ -53,6 +53,7 @@ export async function POST(req: Request) {
     voiceSpeed: 1,
   } as TutorRequest["preferences"];
   const image = typeof body.image === "string" && body.image.length < 3_000_000 ? body.image : undefined;
+  const screen = typeof body.screen === "string" && body.screen.length < 3_000_000 ? body.screen : undefined;
 
   const effort = (["low", "medium", "high"].includes(process.env.ANTHROPIC_EFFORT ?? "") ? process.env.ANTHROPIC_EFFORT : "low") as Effort;
   const messages = toMessages(
@@ -68,6 +69,7 @@ export async function POST(req: Request) {
       .slice(0, 12),
     (Array.isArray(body.concepts) ? body.concepts : []).slice(0, 30).map(normalizeConcept).filter((c) => c.slug),
     normalizeConcept(body.review).slug ? normalizeConcept(body.review) : undefined,
+    screen,
   ) as Anthropic.MessageParam[];
   const schema = tutorTurnSchema as unknown as Record<string, unknown>;
   const haiku = /haiku/i.test(MODEL);

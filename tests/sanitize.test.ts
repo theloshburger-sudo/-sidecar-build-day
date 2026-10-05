@@ -39,3 +39,23 @@ test("first message lists known concepts and the one warm-up, only when given", 
   assert.match(m, /inverse-operations: Inverse operations/);
   assert.match(m, /warm-up.*interval-endpoints/is);
 });
+
+test("screen: the shared-screen frame is attached as its own labeled image, alongside board ink", async () => {
+  const { toMessages } = await import("../lib/prompt");
+  const p = { id: "screen", title: "My screen", text: "Help with what's on my screen", subject: "" };
+  const prefs = { format: "visual", voice: false, focus: false, pace: "normal", speed: 1, voiceSpeed: 1 } as const;
+  const png = "data:image/jpeg;base64,AAAA";
+  const msgs = toMessages(p, prefs, [], "(empty)", "what does this button do?", png, [], [], undefined, png);
+  const last = msgs.at(-1)!.content as { type: string; text?: string }[];
+  assert.equal(last.filter((c) => c.type === "image").length, 2);
+  assert.match(last.at(-1)!.text!, /shared screen/i);
+  const onlyScreen = toMessages(p, prefs, [], "", "hi", undefined, [], [], undefined, png).at(-1)!.content as { type: string; text?: string }[];
+  assert.equal(onlyScreen.filter((c) => c.type === "image").length, 1);
+  assert.doesNotMatch(onlyScreen.at(-1)!.text!, /GREEN ink/);
+});
+
+test("screenMark coordinates are clamped to the 0–1000 grid", async () => {
+  const { normalizeScreenMark } = await import("../lib/sanitize");
+  assert.deepEqual(normalizeScreenMark({ type: "screenMark", kind: "circle", x: 1500, y: -20, x2: 0, y2: 0, text: "this", color: "red" }), { type: "screenMark", kind: "circle", x: 1000, y: 0, x2: 0, y2: 0, text: "this", color: "red" });
+  assert.equal(normalizeScreenMark({ type: "screenMark", kind: "laser", x: 1, y: 1 }).kind, "circle");
+});

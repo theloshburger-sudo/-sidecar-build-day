@@ -72,6 +72,12 @@ Example (equations): narrate "I'm circling the plus 7 because it was the last th
 Example (graphs): narrate "This is where the two lines cross, because that's the one price where buyers and sellers agree." → point {...}
 Example (pointing back): narrate "Look at the 22 on the right side: we still have to take 7 away from it." → pointTo {target "eq1", match "22", text "still needs − 7"}
 Example (asking): narrate "So what goes in this blank?" → pointTo {target "eq2", match "__", text "your turn"}
+# The student's shared screen
+Sometimes the student shares their screen (a Canvas page, Desmos, a PDF, an online quiz, a coding exercise). Then the last message includes a screenshot labeled "the student's shared screen". Teach from what's actually on it: read it carefully, and when the problem is on the screen, treat it as THE problem. Point at the screen with "screenMark" so they know exactly where to look, in the same beat as the sentence that names it:
+- screenMark {kind: "circle" | "box" | "arrow" | "label", x, y, x2, y2, text, color} — coordinates on a 0–1000 grid over the screenshot (x from the left edge, y from the top). circle: center x,y. box: corners (x,y) and (x2,y2). arrow: from (x,y) to the target (x2,y2). label: text at x,y. Unused coordinates are 0. Keep text to 1–4 words. Be precise: aim at the exact field, button, number or line you're talking about.
+- Use the whiteboard as usual for the explanation itself (worked steps, pictures). The screen marks are for "look here"; never redraw the whole screen on the board.
+- If something isn't readable, say so and ask them to zoom in or scroll, rather than guessing.
+
 If the student drew on the whiteboard, you'll get an image of the board; the student's ink is green. Look at it carefully and respond to exactly what they drew (their work, a mistake, an arrow they drew).
 Actions animate in order, so ORDER MATTERS. Use 2–10 actions per turn. Keep text short (board notes, not paragraphs). Use plain Unicode math: x², √, ×, ÷, −, ≤, ≥, π, Δ, subscripts like H₂O, CO₂.
 Layout: the board is 1000 units wide and flows top-to-bottom. Zones: "left" (main column, ~36 characters per line at md), "right" (narrow side column, good for a graph or a small box), "full" (whole width). Each zone stacks downward automatically — you never pick y for normal content. Use left for steps and right for a graph/side notes to show both at once.
@@ -159,19 +165,24 @@ export function toMessages(
   learner: string[] = [],
   concepts: ConceptKey[] = [],
   review?: ConceptKey,
+  screen?: string,
 ): { role: "user" | "assistant"; content: MessageContent }[] {
   const base = textMessages(problem, prefs, history, boardSummary, studentMessage, learner, concepts, review);
-  const m = image ? /^data:(image\/(?:jpeg|png));base64,([A-Za-z0-9+/=]+)$/.exec(image) : null;
-  if (!m) return base;
+  const parse = (url?: string) => (url ? /^data:(image\/(?:jpeg|png));base64,([A-Za-z0-9+/=]+)$/.exec(url) : null);
+  const scr = parse(screen);
+  const ink = parse(image);
+  if (!scr && !ink) return base;
   const last = base[base.length - 1];
+  const img = (m: RegExpExecArray) => ({ type: "image" as const, source: { type: "base64" as const, media_type: m[1] as ImageMedia, data: m[2] } });
+  const notes = [
+    scr && (ink ? "[First image: the student's shared screen right now.]" : "[Image above: the student's shared screen right now.]"),
+    ink && (scr ? "[Second image: the whiteboard right now. The student's own drawing is in GREEN ink.]" : "[Image above: the whiteboard right now. The student's own drawing is in GREEN ink.]"),
+  ].filter(Boolean);
   return [
     ...base.slice(0, -1),
     {
       role: "user",
-      content: [
-        { type: "image", source: { type: "base64", media_type: m[1] as ImageMedia, data: m[2] } },
-        { type: "text", text: `${last.content}\n\n[Image above: the whiteboard right now. The student's own drawing is in GREEN ink.]` },
-      ],
+      content: [...(scr ? [img(scr)] : []), ...(ink ? [img(ink)] : []), { type: "text", text: `${last.content}\n\n${notes.join("\n")}` }],
     },
   ];
 }

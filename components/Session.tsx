@@ -5,6 +5,8 @@ import Cloud, { type Mood } from "./Cloud";
 import TopBar, { StatusPill } from "./TopBar";
 import Whiteboard, { type WhiteboardHandle } from "./Whiteboard";
 import VideoCards from "./VideoCards";
+import ScreenPanel, { type ScreenMark } from "./ScreenPanel";
+import { captureFrame, screenShareSupported, startScreenShare, stopScreenShare } from "@/lib/screen";
 import MathText from "./MathText";
 import type { AppStatus, Engine } from "./SidecarApp";
 import { applyActions, boardHeight, describeBoard, emptyBoard, BOARD_MIN_H, type BoardState, type Measure, type Prim } from "@/lib/board";
@@ -132,6 +134,46 @@ export default function Session({
   /** A warm-up question is waiting for the student's answer. */
   const warmupPending = useRef(false);
   const conceptRecorded = useRef(false);
+  // Screen-follow: a shared tab/window, the last frame Teacher saw, and Teacher's marks on it.
+  const isScreenSession = problem.id === "screen";
+  const [canShare, setCanShare] = useState(false);
+  useEffect(() => setCanShare(screenShareSupported()), []);
+  const [sharing, setSharing] = useState(false);
+  const [screenShot, setScreenShot] = useState<string | null>(null);
+  const [screenMarks, setScreenMarks] = useState<ScreenMark[]>([]);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const stopSharing = useCallback(() => {
+    stopScreenShare(streamRef.current);
+    streamRef.current = null;
+    setSharing(false);
+  }, []);
+  useEffect(() => () => stopScreenShare(streamRef.current), []);
+  const startSharing = useCallback(async (): Promise<boolean> => {
+    setShareError(null);
+    if (!videoRef.current) return false;
+    try {
+      const stream = await startScreenShare(videoRef.current);
+      streamRef.current = stream;
+      stream.getVideoTracks()[0]?.addEventListener("ended", stopSharing);
+      setSharing(true);
+      return true;
+    } catch (e) {
+      // Cancelling the browser's picker isn't an error worth shouting about.
+      if ((e as Error)?.name !== "NotAllowedError") setShareError("Couldn't share your screen. Try again, or use Chrome or Edge on a computer.");
+      return false;
+    }
+  }, [stopSharing]);
+  /** A fresh frame for the next message; Teacher's old marks are cleared because the screen moved on. */
+  const grabFrame = (): string | undefined => {
+    if (!streamRef.current || !videoRef.current) return undefined;
+    const shot = captureFrame(videoRef.current);
+    if (!shot) return undefined;
+    setScreenShot(shot);
+    setScreenMarks([]);
+    return shot;
+  };
   const remember = (p: Promise<unknown> | undefined) => void p?.catch((e) => console.warn("memory write failed", e));
 
   const wb = useRef<WhiteboardHandle>(null);
@@ -221,12 +263,14 @@ export default function Session({
     // Lay out each action separately so each one can be timed to the words that describe it.
     const groups: Prim[][] = [];
     let st = board.current;
-    for (const a of beat.actions) {
+    const marks = beat.actions.filter((a) => a.type === "screenMark");
+    const boardActs = beat.actions.filter((a) => a.type !== "screenMark");
+    for (const a of boardActs) {
       const r = applyActions(st, [a], measure.current ?? undefined);
       st = r.state;
       groups.push(r.prims);
     }
-    const cues = cueFractions(beat.text, beat.actions, boardLookup);
+    const cues = cueFractions(beat.text, boardActs, boardLookup);
     board.current = st;
     setBoardH(boardHeight(st));
     const all = groups.flat();
@@ -234,6 +278,8 @@ export default function Session({
     const uid = ++beatUid.current;
     for (const p of all) if (p.kind !== "clear") p.beat = uid;
     setFocusBeat(uid);
+    // Screen marks appear as the line that names them starts.
+    const showMarks = () => marks.length && setScreenMarks((prev) => [...prev, ...marks.map((m) => ({ ...m, beat: uid }))]);
     const p = prefsRef.current;
     const spd = p.speed || 1;
     /**
@@ -269,17 +315,20 @@ export default function Session({
           if (!alive() || drawn) return;
           drawn = true;
           setSpeaking(true);
+          showMarks();
           wb.current?.enqueue(timed(ms));
         },
       });
       await speech;
       if (!drawn) {
         drawn = true;
+        showMarks();
         wb.current?.enqueue(all);
       }
       setSpeaking(false);
       await wb.current?.whenIdle();
     } else {
+      showMarks();
       wb.current?.enqueue(all);
       await wb.current?.whenIdle();
       // Give the reader a moment on beats that are mostly talk.
@@ -370,7 +419,10 @@ export default function Session({
         // Interrupted: put the rest of this turn on the board instantly.
         if (!alive()) return;
         playToken.current++;
-        const rest = beats.slice(next).flatMap((b) => b.actions);
+        const restAll = beats.slice(next).flatMap((b) => b.actions);
+        const rest = restAll.filter((a) => a.type !== "screenMark");
+        const restMarks = restAll.filter((a) => a.type === "screenMark");
+        if (restMarks.length) setScreenMarks((prev) => [...prev, ...restMarks.map((m) => ({ ...m, beat: -1 }))]);
         next = beats.length;
         if (rest.length) {
           const res = applyActions(board.current, rest, measure.current ?? undefined);
@@ -461,7 +513,7 @@ export default function Session({
   );
 
   const askTutor = useCallback(
-    async (text: string | null, useEngine: Engine, image?: string) => {
+    async (text: string | null, useEngine: Engine, image?: string, screen?: string) => {
       setError(null);
       if (useEngine === "demo") return runDemo(text);
       setThinking(true);
@@ -479,6 +531,7 @@ export default function Session({
             boardSummary: describeBoard(board.current),
             studentMessage: text ?? "",
             image,
+            screen,
             learner: learnerRef.current,
             concepts: conceptsRef.current.slice(0, 30),
             review: reviewRef.current ? { slug: reviewRef.current.slug, label: reviewRef.current.label } : undefined,
@@ -563,7 +616,8 @@ export default function Session({
           console.warn("couldn't load memory", e);
         }
       }
-      askTutor(null, initialEngine);
+      // A screen session starts when the student picks what to share (the browser needs a click).
+      if (!isScreenSession) askTutor(null, initialEngine);
     };
     const fam = getComputedStyle(document.documentElement).getPropertyValue("--font-hand").trim();
     if (document.fonts && fam) {
@@ -604,7 +658,7 @@ export default function Session({
         image = (await wb.current?.snapshot()) ?? undefined;
         inkSent.current = inkCount;
       }
-      askTutor(text, engine, image);
+      askTutor(text, engine, image, engine === "live" ? grabFrame() : undefined);
     },
     [thinking, streaming, askTutor, engine, interrupt, inkCount],
   );
@@ -864,6 +918,30 @@ export default function Session({
         </aside>
 
         <section className="stage">
+          <video ref={videoRef} className="sr-only" playsInline muted aria-hidden />
+          {isScreenSession && !screenShot && (
+            <div className="card screen-gate">
+              <Cloud size={80} mood="idle" />
+              <strong>Show Teacher your screen</strong>
+              <p className="muted">Pick the tab or window with your problem (Canvas, Desmos, a PDF…). Teacher sees one snapshot each time you send a message, and nothing is saved.</p>
+              {canShare && engine === "live" ? (
+                <button
+                  className="btn btn--primary"
+                  onClick={async () => {
+                    if (!(await startSharing())) return;
+                    const shot = grabFrame();
+                    if (shot) askTutor(null, engine, undefined, shot);
+                  }}
+                >
+                  Share my screen
+                </button>
+              ) : (
+                <p className="alert">{engine === "live" ? "Screen sharing needs Chrome, Edge or Firefox on a computer." : "Screen sharing needs live AI."}</p>
+              )}
+              {shareError && <p className="alert">{shareError}</p>}
+            </div>
+          )}
+          <ScreenPanel shot={screenShot} marks={screenMarks} focusBeat={focusBeat} sharing={sharing} onStop={stopSharing} />
           <div className="board-frame">
             <div className="board-head">
               <Cloud size={focus ? 78 : 64} mood={mood} />
@@ -939,6 +1017,11 @@ export default function Session({
                   }}
                 >
                   🧽 Clear my ink
+                </button>
+              )}
+              {canShare && engine === "live" && !isScreenSession && (
+                <button className={`tool ${sharing ? "is-on" : ""}`} onClick={() => (sharing ? stopSharing() : void startSharing())} aria-pressed={sharing} title="Teacher sees a snapshot of your screen with each message">
+                  🖥 {sharing ? "Stop sharing" : "Share screen"}
                 </button>
               )}
               {inkCount > inkSent.current && engine === "live" && !thinking && !streaming && (
