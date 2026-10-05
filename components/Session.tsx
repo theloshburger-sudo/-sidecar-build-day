@@ -5,8 +5,9 @@ import Cloud, { type Mood } from "./Cloud";
 import TopBar, { StatusPill } from "./TopBar";
 import Whiteboard, { type WhiteboardHandle } from "./Whiteboard";
 import VideoCards from "./VideoCards";
+import ScreenPanel, { type ScreenMark } from "./ScreenPanel";
+import { captureFrame, screenShareSupported, startScreenShare, stopScreenShare } from "@/lib/screen";
 import MathText from "./MathText";
-import { RECAPS_KEY, loadRecaps } from "./Home";
 import type { AppStatus, Engine } from "./SidecarApp";
 import { applyActions, boardHeight, describeBoard, emptyBoard, BOARD_MIN_H, type BoardState, type Measure, type Prim } from "@/lib/board";
 import { cueFractions, pointerFits, shiftMarks } from "@/lib/cue";
@@ -17,8 +18,10 @@ import { DEFAULT_VOICE, NATURAL_VOICES } from "@/lib/voices";
 import { BeatBuilder, beatsFromTurn, type Beat } from "@/lib/narration";
 import { BoardStreamParser, STREAM_ERROR } from "@/lib/stream-parse";
 import { normalizeTurn } from "@/lib/sanitize";
-import { addInsight, forgetLearner, loadLearner } from "@/lib/profile";
-import type { Assignment, BoardAction, ChatEntry, Phase, Preferences, Problem, TutorTurn, VideoSuggestion } from "@/lib/types";
+import { useAccount } from "@/lib/account";
+import { newId } from "@/lib/memory";
+import { dueConcept, type ConceptRef } from "@/lib/review";
+import type { Assignment, BoardAction, ChatEntry, ConceptKey, Phase, Preferences, Problem, TutorTurn, VideoSuggestion } from "@/lib/types";
 
 const PHASES: { id: Phase; label: string }[] = [
   { id: "diagnose", label: "Find the gap" },
@@ -119,7 +122,59 @@ export default function Session({
   const [learnerOpen, setLearnerOpen] = useState(false);
   const learnerRef = useRef<string[]>([]);
   learnerRef.current = learner;
-  useEffect(() => setLearner(loadLearner()), []);
+
+  // Memory: concepts this student missed before + the one due for a warm-up.
+  const account = useAccount();
+  const memoryRef = useRef(account.memory);
+  memoryRef.current = account.memory;
+  const [sid] = useState(newId);
+  const sessionId = useRef(sid);
+  const conceptsRef = useRef<ConceptKey[]>([]);
+  const reviewRef = useRef<ConceptRef | null>(null);
+  /** A warm-up question is waiting for the student's answer. */
+  const warmupPending = useRef(false);
+  const conceptRecorded = useRef(false);
+  // Screen-follow: a shared tab/window, the last frame Teacher saw, and Teacher's marks on it.
+  const isScreenSession = problem.id === "screen";
+  const [canShare, setCanShare] = useState(false);
+  useEffect(() => setCanShare(screenShareSupported()), []);
+  const [sharing, setSharing] = useState(false);
+  const [screenShot, setScreenShot] = useState<string | null>(null);
+  const [screenMarks, setScreenMarks] = useState<ScreenMark[]>([]);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const stopSharing = useCallback(() => {
+    stopScreenShare(streamRef.current);
+    streamRef.current = null;
+    setSharing(false);
+  }, []);
+  useEffect(() => () => stopScreenShare(streamRef.current), []);
+  const startSharing = useCallback(async (): Promise<boolean> => {
+    setShareError(null);
+    if (!videoRef.current) return false;
+    try {
+      const stream = await startScreenShare(videoRef.current);
+      streamRef.current = stream;
+      stream.getVideoTracks()[0]?.addEventListener("ended", stopSharing);
+      setSharing(true);
+      return true;
+    } catch (e) {
+      // Cancelling the browser's picker isn't an error worth shouting about.
+      if ((e as Error)?.name !== "NotAllowedError") setShareError("Couldn't share your screen. Try again, or use Chrome or Edge on a computer.");
+      return false;
+    }
+  }, [stopSharing]);
+  /** A fresh frame for the next message; Teacher's old marks are cleared because the screen moved on. */
+  const grabFrame = (): string | undefined => {
+    if (!streamRef.current || !videoRef.current) return undefined;
+    const shot = captureFrame(videoRef.current);
+    if (!shot) return undefined;
+    setScreenShot(shot);
+    setScreenMarks([]);
+    return shot;
+  };
+  const remember = (p: Promise<unknown> | undefined) => void p?.catch((e) => console.warn("memory write failed", e));
 
   const wb = useRef<WhiteboardHandle>(null);
   const board = useRef<BoardState>(emptyBoard());
@@ -208,12 +263,14 @@ export default function Session({
     // Lay out each action separately so each one can be timed to the words that describe it.
     const groups: Prim[][] = [];
     let st = board.current;
-    for (const a of beat.actions) {
+    const marks = beat.actions.filter((a) => a.type === "screenMark");
+    const boardActs = beat.actions.filter((a) => a.type !== "screenMark");
+    for (const a of boardActs) {
       const r = applyActions(st, [a], measure.current ?? undefined);
       st = r.state;
       groups.push(r.prims);
     }
-    const cues = cueFractions(beat.text, beat.actions, boardLookup);
+    const cues = cueFractions(beat.text, boardActs, boardLookup);
     board.current = st;
     setBoardH(boardHeight(st));
     const all = groups.flat();
@@ -221,6 +278,8 @@ export default function Session({
     const uid = ++beatUid.current;
     for (const p of all) if (p.kind !== "clear") p.beat = uid;
     setFocusBeat(uid);
+    // Screen marks appear as the line that names them starts.
+    const showMarks = () => marks.length && setScreenMarks((prev) => [...prev, ...marks.map((m) => ({ ...m, beat: uid }))]);
     const p = prefsRef.current;
     const spd = p.speed || 1;
     /**
@@ -256,17 +315,20 @@ export default function Session({
           if (!alive() || drawn) return;
           drawn = true;
           setSpeaking(true);
+          showMarks();
           wb.current?.enqueue(timed(ms));
         },
       });
       await speech;
       if (!drawn) {
         drawn = true;
+        showMarks();
         wb.current?.enqueue(all);
       }
       setSpeaking(false);
       await wb.current?.whenIdle();
     } else {
+      showMarks();
       wb.current?.enqueue(all);
       await wb.current?.whenIdle();
       // Give the reader a moment on beats that are mostly talk.
@@ -357,7 +419,10 @@ export default function Session({
         // Interrupted: put the rest of this turn on the board instantly.
         if (!alive()) return;
         playToken.current++;
-        const rest = beats.slice(next).flatMap((b) => b.actions);
+        const restAll = beats.slice(next).flatMap((b) => b.actions);
+        const rest = restAll.filter((a) => a.type !== "screenMark");
+        const restMarks = restAll.filter((a) => a.type === "screenMark");
+        if (restMarks.length) setScreenMarks((prev) => [...prev, ...restMarks.map((m) => ({ ...m, beat: -1 }))]);
         next = beats.length;
         if (rest.length) {
           const res = applyActions(board.current, rest, measure.current ?? undefined);
@@ -379,14 +444,37 @@ export default function Session({
   /** Record a finished turn: history, progress, celebration. */
   const finishTurn = useCallback((turn: TutorTurn) => {
     pushHistory({ role: "tutor", turn });
-    if (turn.insight) {
-      const next = addInsight(turn.insight);
-      if (next) {
-        setLearner(next);
-        setLearnerNew(true);
-        setNotice(`🧠 Teacher learned: ${turn.insight}`);
-        setTimeout(() => setLearnerNew(false), 3200);
+    const mem = memoryRef.current;
+    if (turn.insight && mem && !lesson) {
+      mem
+        .addNote(turn.insight)
+        .then((next) => {
+          if (!next) return;
+          setLearner(next);
+          setLearnerNew(true);
+          setNotice(`🧠 Teacher learned: ${turn.insight}`);
+          setTimeout(() => setLearnerNew(false), 3200);
+        })
+        .catch((e) => console.warn("memory write failed", e));
+    }
+    const review = reviewRef.current;
+    let gradingWarmup = false;
+    if (warmupPending.current && turn.phase !== "warmup") {
+      warmupPending.current = false;
+      gradingWarmup = true;
+      if (review && turn.verdict !== "none") {
+        const hit = turn.verdict === "correct";
+        remember(mem?.recordSession({ id: newId(), title: `Warm-up: ${review.label}`, subject: review.subject, concept: review, event: hit ? "hit" : "miss", result: hit ? "Warm-up ✓" : "Warm-up: needs another look" }));
       }
+    }
+    if (turn.phase === "warmup") warmupPending.current = true;
+    // The idea this session is really about: a miss, so it comes back for review in 2 days.
+    const c = turn.concept;
+    if (c?.slug && !lesson && !conceptRecorded.current && turn.phase !== "warmup" && !(gradingWarmup && c.slug === review?.slug)) {
+      conceptRecorded.current = true;
+      const ref = { ...c, subject: problem.subject || review?.subject || "" };
+      if (!conceptsRef.current.some((k) => k.slug === c.slug)) conceptsRef.current = [{ slug: c.slug, label: c.label }, ...conceptsRef.current];
+      remember(mem?.recordSession({ id: sessionId.current, title: problem.title, subject: ref.subject, gap: turn.gap, concept: ref, event: "miss" }));
     }
     if (turn.plan.length) setPlan(turn.plan);
     if (turn.gap) setGap(turn.gap);
@@ -396,7 +484,7 @@ export default function Session({
       setHappy(true);
       setTimeout(() => setHappy(false), 2600);
     }
-  }, []);
+  }, [lesson, problem]);
 
   /** Interrupt whatever Teacher is saying/drawing. */
   const interrupt = useCallback(() => {
@@ -425,7 +513,7 @@ export default function Session({
   );
 
   const askTutor = useCallback(
-    async (text: string | null, useEngine: Engine, image?: string) => {
+    async (text: string | null, useEngine: Engine, image?: string, screen?: string) => {
       setError(null);
       if (useEngine === "demo") return runDemo(text);
       setThinking(true);
@@ -443,7 +531,10 @@ export default function Session({
             boardSummary: describeBoard(board.current),
             studentMessage: text ?? "",
             image,
+            screen,
             learner: learnerRef.current,
+            concepts: conceptsRef.current.slice(0, 30),
+            review: reviewRef.current ? { slug: reviewRef.current.slug, label: reviewRef.current.label } : undefined,
           }),
         });
         if (!res.ok || !res.body) {
@@ -508,11 +599,25 @@ export default function Session({
 
   // Kick off the session once fonts are ready (so handwriting measures correctly).
   useEffect(() => {
-    if (started.current) return;
+    if (started.current || !account.ready) return;
     started.current = true;
-    const go = () => {
+    const go = async () => {
       measure.current = makeMeasure();
-      askTutor(null, initialEngine);
+      const mem = memoryRef.current;
+      if (mem && !lesson) {
+        try {
+          const [notes, concepts] = await Promise.all([mem.notes(), mem.concepts()]);
+          setLearner(notes);
+          conceptsRef.current = concepts.filter((k) => k.subject.toLowerCase() === problem.subject.toLowerCase()).concat(concepts.filter((k) => k.subject.toLowerCase() !== problem.subject.toLowerCase())).map((k) => ({ slug: k.slug, label: k.label }));
+          // A review session is the warm-up itself; otherwise warm up on whatever is due.
+          const forced = problem.id.startsWith("review:") ? concepts.find((k) => `review:${k.slug}` === problem.id) : null;
+          reviewRef.current = initialEngine === "live" ? forced ?? dueConcept(concepts, problem.subject) : null;
+        } catch (e) {
+          console.warn("couldn't load memory", e);
+        }
+      }
+      // A screen session starts when the student picks what to share (the browser needs a click).
+      if (!isScreenSession) askTutor(null, initialEngine);
     };
     const fam = getComputedStyle(document.documentElement).getPropertyValue("--font-hand").trim();
     if (document.fonts && fam) {
@@ -522,7 +627,7 @@ export default function Session({
       stopSpeaking();
       recognizer.current?.abort();
     };
-  }, [askTutor, initialEngine]);
+  }, [askTutor, initialEngine, account.ready]);
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
@@ -533,16 +638,11 @@ export default function Session({
     if (history.length === 3) setShowProblem(false);
   }, [history.length]);
 
-  // Remember finished sessions on this device.
+  // Remember finished sessions (same session id, so a later practice result updates it in place).
   useEffect(() => {
-    if (lastTutor?.phase !== "wrapup") return;
-    try {
-      const recaps = loadRecaps();
-      if (recaps[0]?.title === problem.title && Date.now() - new Date(recaps[0].date).getTime() < 60_000) return;
-      recaps.unshift({ date: new Date().toISOString(), title: problem.title, subject: problem.subject, gap, result: practiceResult ?? "Finished" });
-      localStorage.setItem(RECAPS_KEY, JSON.stringify(recaps.slice(0, 20)));
-    } catch {}
-  }, [lastTutor, problem, gap, practiceResult]);
+    if (lastTutor?.phase !== "wrapup" || lesson) return;
+    remember(memoryRef.current?.recordSession({ id: sessionId.current, title: problem.title, subject: problem.subject, gap, result: practiceResult ?? "Finished" }));
+  }, [lastTutor, problem, gap, practiceResult, lesson]);
 
   // ---------------------------------------------------------------- student input
   const send = useCallback(
@@ -558,7 +658,7 @@ export default function Session({
         image = (await wb.current?.snapshot()) ?? undefined;
         inkSent.current = inkCount;
       }
-      askTutor(text, engine, image);
+      askTutor(text, engine, image, engine === "live" ? grabFrame() : undefined);
     },
     [thinking, streaming, askTutor, engine, interrupt, inkCount],
   );
@@ -701,7 +801,7 @@ export default function Session({
   const lastBeatIdx = beatLines.reduce((acc, l, i) => (l ? i : acc), -1);
   const mood: Mood = listening ? "listening" : thinking ? "thinking" : happy ? "happy" : speaking || boardBusy ? "talking" : "idle";
   const focus = prefs.focus;
-  const phaseIdx = PHASES.findIndex((p) => p.id === phase);
+  const phaseIdx = Math.max(0, PHASES.findIndex((p) => p.id === phase)); // a warm-up counts as the first step
   const done = phase === "wrapup";
   const micOk = typeof window !== "undefined" && speechRecognitionSupported();
 
@@ -818,6 +918,30 @@ export default function Session({
         </aside>
 
         <section className="stage">
+          <video ref={videoRef} className="sr-only" playsInline muted aria-hidden />
+          {isScreenSession && !screenShot && (
+            <div className="card screen-gate">
+              <Cloud size={80} mood="idle" />
+              <strong>Show Teacher your screen</strong>
+              <p className="muted">Pick the tab or window with your problem (Canvas, Desmos, a PDF…). Teacher sees one snapshot each time you send a message, and nothing is saved.</p>
+              {canShare && engine === "live" ? (
+                <button
+                  className="btn btn--primary"
+                  onClick={async () => {
+                    if (!(await startSharing())) return;
+                    const shot = grabFrame();
+                    if (shot) askTutor(null, engine, undefined, shot);
+                  }}
+                >
+                  Share my screen
+                </button>
+              ) : (
+                <p className="alert">{engine === "live" ? "Screen sharing needs Chrome, Edge or Firefox on a computer." : "Screen sharing needs live AI."}</p>
+              )}
+              {shareError && <p className="alert">{shareError}</p>}
+            </div>
+          )}
+          <ScreenPanel shot={screenShot} marks={screenMarks} focusBeat={focusBeat} sharing={sharing} onStop={stopSharing} />
           <div className="board-frame">
             <div className="board-head">
               <Cloud size={focus ? 78 : 64} mood={mood} />
@@ -895,6 +1019,11 @@ export default function Session({
                   🧽 Clear my ink
                 </button>
               )}
+              {canShare && engine === "live" && !isScreenSession && (
+                <button className={`tool ${sharing ? "is-on" : ""}`} onClick={() => (sharing ? stopSharing() : void startSharing())} aria-pressed={sharing} title="Teacher sees a snapshot of your screen with each message">
+                  🖥 {sharing ? "Stop sharing" : "Share screen"}
+                </button>
+              )}
               {inkCount > inkSent.current && engine === "live" && !thinking && !streaming && (
                 <button className="tool tool--send" onClick={() => send(input.trim() || "Take a look at what I drew on the board.")}>
                   Show Teacher my drawing →
@@ -916,12 +1045,14 @@ export default function Session({
                     ) : (
                       <p className="muted">Nothing yet. Ask questions and answer in your own words, and Teacher will adapt.</p>
                     )}
-                    <p className="muted small">Saved only on this device. Teacher uses it to tailor explanations.</p>
+                    <p className="muted small">
+                      {account.memory?.kind === "cloud" ? "Saved to your account." : "Saved only on this device."} Teacher uses it to tailor explanations.
+                    </p>
                     {learner.length > 0 && (
                       <button
                         className="link-back small"
                         onClick={() => {
-                          forgetLearner();
+                          remember(memoryRef.current?.forgetNotes());
                           setLearner([]);
                         }}
                       >
@@ -1115,6 +1246,11 @@ export default function Session({
             </form>
             {!done && (
               <div className="quick">
+                {lastTutor?.phase === "warmup" && (
+                  <button className="quick-chip" onClick={() => send("Skip the warm-up")} disabled={thinking || streaming}>
+                    Skip the warm-up
+                  </button>
+                )}
                 {QUICK.map((q) => (
                   <button key={q} className="quick-chip" onClick={() => send(q)} disabled={thinking || !lastTutor}>
                     {q}
@@ -1130,6 +1266,9 @@ export default function Session({
                 <button className="btn btn--ghost" onClick={downloadRecap}>
                   ⬇ Save my recap
                 </button>
+                {account.configured && account.ready && !account.user && !lesson && (
+                  <p className="muted small">Want Teacher to remember this next time on any device? Sign in from the home page.</p>
+                )}
               </div>
             )}
           </div>

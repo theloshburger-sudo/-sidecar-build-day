@@ -1,4 +1,4 @@
-import type { ChatEntry, Preferences, Problem } from "./types";
+import type { ChatEntry, ConceptKey, Preferences, Problem } from "./types";
 
 const FORMAT_HINT: Record<Preferences["format"], string> = {
   visual: "Start with a picture: lean on the whiteboard (diagrams, graphs, circled terms) and keep words short.",
@@ -13,6 +13,7 @@ export const TUTOR_SYSTEM = `You are "Teacher", a friendly, sleek little floatin
 You are a great 1-on-1 tutor, not a quiz. The student came because they're stuck on THIS problem. Get them unstuck fast, on the real problem, and make them do real thinking.
 
 Flow (the "phase" field):
+0. warmup — ONLY when the first message names a concept due for a warm-up. Your first turn: one friendly line ("Before your problem, a quick one from last time"), then ONE short question on that concept (a fresh mini example, 10–30 seconds, not their homework). Next turn: grade it with "assess"/"verdict" (if wrong, give the fix in one line, no mini-lesson), then go straight into the diagnose turn on the real problem in that same reply. If they say "Skip the warm-up", set verdict "none" and go straight to diagnose.
 1. diagnose — ONE turn only. Draw the key part of the problem on the board, then ask where they're stuck. Offer 2–3 short "choices" such as "I don't know how to start", "I get stuck at a step", "Can you check my answer?", tailored to this problem. Never quiz trivia (e.g. "what does this symbol mean?") before helping. If their first message already says what's wrong, skip straight to teach.
 2. teach — "I do, you do" on the REAL problem. Show ONE step (or one part of a multi-part problem) with the reason, on the board, then hand the NEXT step to the student: "Your turn: …". If the problem has parallel parts (∩ then ∪, part a then b), work the first part as the example and let them do the next. On the first teach turn set "plan" to 2–4 short step labels and "step" to 0; advance "step" as steps get done.
 3. check — Look at what the student actually wrote. Right → say exactly why it's right, then move on. Wrong → point at the specific mistake on the board (circle it) and give a hint.
@@ -49,6 +50,7 @@ You'll get notes on how this student learns best (from earlier turns and session
     partial → say what's right, then exactly what's missing.
     correct → say what they did right and why it works, then move on.
 - "gap": the named missing concept once you know it (e.g. "Inverse operations: undoing +3 before ÷2"), else "".
+- "concept": set together with "gap": {"slug": a short kebab-case key for the general idea (e.g. "inverse-operations", "interval-endpoints", "supply-demand-equilibrium"), "label": 2–5 plain words}. If the first message lists concepts this student missed before and one is the same idea, reuse that slug EXACTLY. On the warm-up grading turn, use the warm-up concept's slug. Otherwise {"slug":"","label":""}.
 - If the student wants a DIFFERENT problem or topic ("let's move on to…", "can we do i⁴ instead?"), don't keep drilling this one or its practice problem: say "Sure! Tap New problem above the board and type it in, and we'll start fresh." and set "question" to "". If they only say they understand, wrap up briefly.
 - Stay on the student's schoolwork. If asked something unrelated or unsafe, kindly steer back.
 
@@ -70,6 +72,12 @@ Example (equations): narrate "I'm circling the plus 7 because it was the last th
 Example (graphs): narrate "This is where the two lines cross, because that's the one price where buyers and sellers agree." → point {...}
 Example (pointing back): narrate "Look at the 22 on the right side: we still have to take 7 away from it." → pointTo {target "eq1", match "22", text "still needs − 7"}
 Example (asking): narrate "So what goes in this blank?" → pointTo {target "eq2", match "__", text "your turn"}
+# The student's shared screen
+Sometimes the student shares their screen (a Canvas page, Desmos, a PDF, an online quiz, a coding exercise). Then the last message includes a screenshot labeled "the student's shared screen". Teach from what's actually on it: read it carefully, and when the problem is on the screen, treat it as THE problem. Point at the screen with "screenMark" so they know exactly where to look, in the same beat as the sentence that names it:
+- screenMark {kind: "circle" | "box" | "arrow" | "label", x, y, x2, y2, text, color} — coordinates on a 0–1000 grid over the screenshot (x from the left edge, y from the top). circle: center x,y. box: corners (x,y) and (x2,y2). arrow: from (x,y) to the target (x2,y2). label: text at x,y. Unused coordinates are 0. Keep text to 1–4 words. Be precise: aim at the exact field, button, number or line you're talking about.
+- Use the whiteboard as usual for the explanation itself (worked steps, pictures). The screen marks are for "look here"; never redraw the whole screen on the board.
+- If something isn't readable, say so and ask them to zoom in or scroll, rather than guessing.
+
 If the student drew on the whiteboard, you'll get an image of the board; the student's ink is green. Look at it carefully and respond to exactly what they drew (their work, a mistake, an arrow they drew).
 Actions animate in order, so ORDER MATTERS. Use 2–10 actions per turn. Keep text short (board notes, not paragraphs). Use plain Unicode math: x², √, ×, ÷, −, ≤, ≥, π, Δ, subscripts like H₂O, CO₂.
 Layout: the board is 1000 units wide and flows top-to-bottom. Zones: "left" (main column, ~36 characters per line at md), "right" (narrow side column, good for a graph or a small box), "full" (whole width). Each zone stacks downward automatically — you never pick y for normal content. Use left for steps and right for a graph/side notes to show both at once.
@@ -119,10 +127,10 @@ Respond with ONLY the JSON object matching the schema. Every field is required; 
 /** Used when the reply isn't schema-constrained: the same turn, described in words. */
 export const PROMPTED_FORMAT = `# Reply format (strict)
 Reply with ONE raw JSON object and nothing else: no markdown fences, no words before or after it.
-Keys in this order: "assess" (string), "verdict" ("none" | "correct" | "partial" | "incorrect"), "board" (array of actions, each an object with a "type" and the fields listed for that type), "say" (string), "phase" ("diagnose" | "teach" | "check" | "practice" | "wrapup"), "question" (string), "choices" (array of strings), "gap" (string), "plan" (array of strings), "step" (integer), "videos" (array of {"title","query"}), "practice" (string), "insight" (string).
-Shape example: {"assess":"","verdict":"none","board":[{"type":"narrate","text":"Here's our equation."},{"type":"write","id":"eq1","text":"3x + 7 = 22","zone":"left","size":"lg","color":"ink"},{"type":"narrate","text":"Look at the plus 7."},{"type":"pointTo","target":"eq1","match":"+ 7","text":"undo this"}],"say":"Here's our equation. Look at the plus 7.","phase":"diagnose","question":"Where are you stuck?","choices":["I don't know how to start"],"gap":"","plan":[],"step":0,"videos":[],"practice":"","insight":""}`;
+Keys in this order: "assess" (string), "verdict" ("none" | "correct" | "partial" | "incorrect"), "board" (array of actions, each an object with a "type" and the fields listed for that type), "say" (string), "phase" ("warmup" | "diagnose" | "teach" | "check" | "practice" | "wrapup"), "question" (string), "choices" (array of strings), "gap" (string), "concept" ({"slug","label"}), "plan" (array of strings), "step" (integer), "videos" (array of {"title","query"}), "practice" (string), "insight" (string).
+Shape example: {"assess":"","verdict":"none","board":[{"type":"narrate","text":"Here's our equation."},{"type":"write","id":"eq1","text":"3x + 7 = 22","zone":"left","size":"lg","color":"ink"},{"type":"narrate","text":"Look at the plus 7."},{"type":"pointTo","target":"eq1","match":"+ 7","text":"undo this"}],"say":"Here's our equation. Look at the plus 7.","phase":"diagnose","question":"Where are you stuck?","choices":["I don't know how to start"],"gap":"","concept":{"slug":"","label":""},"plan":[],"step":0,"videos":[],"practice":"","insight":""}`;
 
-export function firstMessage(problem: Problem, prefs: Preferences, learner: string[] = []): string {
+export function firstMessage(problem: Problem, prefs: Preferences, learner: string[] = [], concepts: ConceptKey[] = [], review?: ConceptKey): string {
   return [
     `Here is the exact problem I'm stuck on (subject: ${problem.subject || "unknown"}):`,
     "",
@@ -131,6 +139,8 @@ export function firstMessage(problem: Problem, prefs: Preferences, learner: stri
     `My preferred way to start: ${prefs.format}. ${FORMAT_HINT[prefs.format]}`,
     prefs.pace === "slow" ? "Please go slowly with extra-small steps." : "",
     learner.length ? `What you've learned about how I learn (from earlier sessions):\n${learner.map((n) => `- ${n}`).join("\n")}` : "",
+    concepts.length ? `Concepts I've missed before (slug: label). Reuse a slug when it's the same idea:\n${concepts.map((c) => `- ${c.slug}: ${c.label}`).join("\n")}` : "",
+    review ? `Due for a warm-up today: ${review.slug} (${review.label}). Start with the one-question warm-up on it, then my problem.` : "",
     "",
     "Start the session: greet me in a few words, draw the problem's key part on the board (write the equation, set up the givens, or put the sets on a number line), and ask where I'm stuck.",
   ]
@@ -153,19 +163,26 @@ export function toMessages(
   studentMessage: string,
   image?: string,
   learner: string[] = [],
+  concepts: ConceptKey[] = [],
+  review?: ConceptKey,
+  screen?: string,
 ): { role: "user" | "assistant"; content: MessageContent }[] {
-  const base = textMessages(problem, prefs, history, boardSummary, studentMessage, learner);
-  const m = image ? /^data:(image\/(?:jpeg|png));base64,([A-Za-z0-9+/=]+)$/.exec(image) : null;
-  if (!m) return base;
+  const base = textMessages(problem, prefs, history, boardSummary, studentMessage, learner, concepts, review);
+  const parse = (url?: string) => (url ? /^data:(image\/(?:jpeg|png));base64,([A-Za-z0-9+/=]+)$/.exec(url) : null);
+  const scr = parse(screen);
+  const ink = parse(image);
+  if (!scr && !ink) return base;
   const last = base[base.length - 1];
+  const img = (m: RegExpExecArray) => ({ type: "image" as const, source: { type: "base64" as const, media_type: m[1] as ImageMedia, data: m[2] } });
+  const notes = [
+    scr && (ink ? "[First image: the student's shared screen right now.]" : "[Image above: the student's shared screen right now.]"),
+    ink && (scr ? "[Second image: the whiteboard right now. The student's own drawing is in GREEN ink.]" : "[Image above: the whiteboard right now. The student's own drawing is in GREEN ink.]"),
+  ].filter(Boolean);
   return [
     ...base.slice(0, -1),
     {
       role: "user",
-      content: [
-        { type: "image", source: { type: "base64", media_type: m[1] as ImageMedia, data: m[2] } },
-        { type: "text", text: `${last.content}\n\n[Image above: the whiteboard right now. The student's own drawing is in GREEN ink.]` },
-      ],
+      content: [...(scr ? [img(scr)] : []), ...(ink ? [img(ink)] : []), { type: "text", text: `${last.content}\n\n${notes.join("\n")}` }],
     },
   ];
 }
@@ -177,8 +194,10 @@ function textMessages(
   boardSummary: string,
   studentMessage: string,
   learner: string[] = [],
+  concepts: ConceptKey[] = [],
+  review?: ConceptKey,
 ): { role: "user" | "assistant"; content: string }[] {
-  const msgs: { role: "user" | "assistant"; content: string }[] = [{ role: "user", content: firstMessage(problem, prefs, learner) }];
+  const msgs: { role: "user" | "assistant"; content: string }[] = [{ role: "user", content: firstMessage(problem, prefs, learner, concepts, review) }];
   // Keep the conversation bounded: the first turns + the most recent ones.
   const trimmed = history.length > 24 ? [...history.slice(0, 2), ...history.slice(-20)] : history;
   for (const entry of trimmed) {
@@ -190,6 +209,7 @@ function textMessages(
         question: t.question,
         choices: t.choices,
         gap: t.gap,
+        concept: t.concept ?? { slug: "", label: "" },
         plan: t.plan,
         step: t.step,
         practice: t.practice,

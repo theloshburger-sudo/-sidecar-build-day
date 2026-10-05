@@ -4,6 +4,7 @@ import { MODEL, friendlyError, getClient, hasKey, rateLimited, retryable } from 
 import { PROMPTED_FORMAT, TUTOR_SYSTEM, toMessages } from "@/lib/prompt";
 import { tutorTurnSchema } from "@/lib/schema";
 import { STREAM_ERROR } from "@/lib/stream-parse";
+import { normalizeConcept } from "@/lib/sanitize";
 import type { TutorRequest } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -34,6 +35,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Slow down a little — too many requests. Try again in a minute." }, { status: 429 });
   }
 
+  // Two screenshots at most (board ink + shared screen): refuse anything bigger before parsing it.
+  if (Number(req.headers.get("content-length") ?? 0) > 7_000_000) {
+    return NextResponse.json({ error: "That message is too large to send. Try again." }, { status: 413 });
+  }
   let body: TutorRequest;
   try {
     body = (await req.json()) as TutorRequest;
@@ -52,6 +57,7 @@ export async function POST(req: Request) {
     voiceSpeed: 1,
   } as TutorRequest["preferences"];
   const image = typeof body.image === "string" && body.image.length < 3_000_000 ? body.image : undefined;
+  const screen = typeof body.screen === "string" && body.screen.length < 3_000_000 ? body.screen : undefined;
 
   const effort = (["low", "medium", "high"].includes(process.env.ANTHROPIC_EFFORT ?? "") ? process.env.ANTHROPIC_EFFORT : "low") as Effort;
   const messages = toMessages(
@@ -65,6 +71,9 @@ export async function POST(req: Request) {
       .filter((n): n is string => typeof n === "string")
       .map((n) => n.slice(0, 120))
       .slice(0, 12),
+    (Array.isArray(body.concepts) ? body.concepts : []).slice(0, 30).map(normalizeConcept).filter((c) => c.slug),
+    normalizeConcept(body.review).slug ? normalizeConcept(body.review) : undefined,
+    screen,
   ) as Anthropic.MessageParam[];
   const schema = tutorTurnSchema as unknown as Record<string, unknown>;
   const haiku = /haiku/i.test(MODEL);

@@ -1,6 +1,7 @@
-import type { BoardAction, Phase, Problem, TutorTurn, Verdict } from "./types";
+import { toSlug } from "./review";
+import type { BoardAction, ConceptKey, Phase, Problem, TutorTurn, Verdict } from "./types";
 
-const PHASES: Phase[] = ["diagnose", "teach", "check", "practice", "wrapup"];
+const PHASES: Phase[] = ["warmup", "diagnose", "teach", "check", "practice", "wrapup"];
 const VERDICTS: Verdict[] = ["none", "correct", "partial", "incorrect"];
 
 const s = (v: unknown, max = 600) => (typeof v === "string" ? v.slice(0, max) : "");
@@ -13,6 +14,7 @@ export function normalizeTurn(raw: unknown): TutorTurn {
   const verdict = VERDICTS.includes(r.verdict as Verdict) ? (r.verdict as Verdict) : "none";
   const board = arr(r.board)
     .filter((b): b is BoardAction => !!b && typeof b === "object" && typeof (b as BoardAction).type === "string")
+    .map((b) => (b.type === "screenMark" ? normalizeScreenMark(b) : b))
     .slice(0, 40);
   return {
     say:
@@ -39,7 +41,33 @@ export function normalizeTurn(raw: unknown): TutorTurn {
     practice: s(r.practice, 800),
     verdict,
     insight: s(r.insight, 120).trim(),
+    concept: normalizeConcept(r.concept),
   };
+}
+
+const MARK_KINDS = ["circle", "arrow", "box", "label"];
+const COLORS = ["ink", "blue", "green", "red", "purple", "orange"];
+const grid = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.max(0, Math.min(1000, Math.round(v))) : 0);
+
+/** A mark on the student's shared screen, on a 0–1000 grid over the screenshot (x across, y down). */
+export function normalizeScreenMark(raw: unknown): BoardAction {
+  const m = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  return {
+    type: "screenMark",
+    kind: MARK_KINDS.includes(m.kind as string) ? (m.kind as string) : "circle",
+    x: grid(m.x),
+    y: grid(m.y),
+    x2: grid(m.x2),
+    y2: grid(m.y2),
+    text: s(m.text, 60),
+    color: (COLORS.includes(m.color as string) ? m.color : "red") as BoardAction["color"],
+  };
+}
+
+export function normalizeConcept(raw: unknown): ConceptKey {
+  const c = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const slug = toSlug(s(c.slug, 80));
+  return slug ? { slug, label: s(c.label, 120).trim() || slug.replace(/-/g, " ") } : { slug: "", label: "" };
 }
 
 /** Offline fallback: split pasted/extracted text into numbered problems. */

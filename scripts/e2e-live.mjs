@@ -2,7 +2,7 @@
 import { chromium } from "playwright";
 const OUT = process.argv[2] || ".";
 const BASE = process.env.BASE_URL || "http://localhost:3000";
-const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" }).catch(() => chromium.launch());
+const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium", args: ["--mute-audio"] }).catch(() => chromium.launch({ args: ["--mute-audio"] }));
 const page = await browser.newPage({ viewport: { width: 1360, height: 880 } });
 const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));

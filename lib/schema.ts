@@ -51,6 +51,7 @@ export const boardActionSchema = {
       color,
     }),
     variant("pointTo", { target: str, match: str, text: str }),
+    variant("screenMark", { kind: { type: "string", enum: ["circle", "arrow", "box", "label"] }, x: num, y: num, x2: num, y2: num, text: str, color }),
     variant("narrate", { text: str }),
     variant("clear", {}),
   ],
@@ -62,16 +63,17 @@ export const tutorTurnSchema = {
   // Grade FIRST (assess + verdict are a few words), then board streams so Teacher starts talking and
   // drawing while the rest arrives. With board first, Teacher had already said "Nice work!" before
   // it had checked the student's answer.
-  required: ["assess", "verdict", "board", "say", "phase", "question", "choices", "gap", "plan", "step", "videos", "practice", "insight"],
+  required: ["assess", "verdict", "board", "say", "phase", "question", "choices", "gap", "concept", "plan", "step", "videos", "practice", "insight"],
   properties: {
     assess: str,
     verdict: { type: "string", enum: ["none", "correct", "partial", "incorrect"] },
     board: { type: "array", items: boardActionSchema },
     say: str,
-    phase: { type: "string", enum: ["diagnose", "teach", "check", "practice", "wrapup"] },
+    phase: { type: "string", enum: ["warmup", "diagnose", "teach", "check", "practice", "wrapup"] },
     question: str,
     choices: strArr,
     gap: str,
+    concept: { type: "object", additionalProperties: false, required: ["slug", "label"], properties: { slug: str, label: str } },
     plan: strArr,
     step: { type: "integer" },
     videos: {

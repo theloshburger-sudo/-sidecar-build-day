@@ -33,7 +33,22 @@ Upload a Canvas assignment or study guide (PDF or a phone photo), tap the one pr
 | **Draw on the board yourself** | ✍️ **Draw** lets you write on the whiteboard with a mouse, finger or stylus. Your green ink is sent to Claude as an image with your next message, so Teacher can respond to what you drew. |
 | **Videos, only when useful** | 1–2 targeted YouTube suggestions, shown as real video cards if a YouTube key is set and as search links otherwise. |
 | **Offline demo mode** | Four fully scripted lessons (Algebra, Accounting, Chemistry, Economics) that run with **no internet and no API key**. If live AI fails on a sample's first turn, the app switches to the script automatically. |
-| **Private** | No accounts and no database. Recent sessions are stored only in your browser (localStorage). |
+| **Private** | No account needed. Guests keep everything in their browser. Signed-in students store only concepts, session titles and learning notes, never homework text. "Forget everything" deletes it all. |
+
+## What makes it different: memory, Canvas, your screen
+
+| | |
+|---|---|
+| **Remembers your weak spots** | When Teacher finds the idea you were missing, it's saved as a concept. It comes back as a one-question warm-up right before you'd forget it: after 2 days, then 1 week, 3 weeks and 2 months. A miss starts it over. Home shows **Your weak spots** with a one-tap Review. Guests keep this in their browser; signing in (Google or an email link) keeps it on every device, and imports what this browser already had. |
+| **Canvas, no uploading** | Connect once with a Canvas access token. **Due soon from Canvas** lists unsubmitted work for the next two weeks; **Work on this** pulls the assignment's instructions straight into the problem picker. The token is encrypted (AES-256-GCM, bound to your account) and only used from the server. |
+| **Help with what's on my screen** | Share a tab or window (Canvas, Desmos, a PDF, a quiz). Each message sends one fresh snapshot, and Teacher circles, boxes and points at the exact spot while it talks, then explains on the whiteboard. Desktop Chrome, Edge or Firefox. Snapshots are never saved. |
+
+### Turning these on (all optional)
+1. **Accounts + memory across devices:** set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and run `supabase/migrations/001_sidecar_memory.sql` and `002_sidecar_canvas.sql` (additive; every object is prefixed `sidecar_`, so a shared project is fine). In Supabase: enable the **Google** provider, add your site URL under **Auth → URL Configuration → Redirect URLs**, and (for real traffic) set custom SMTP, because the built-in email sender is heavily rate limited.
+2. **Canvas:** set `CANVAS_TOKEN_KEY` to the output of `openssl rand -base64 32`. Needs accounts. Changing the key disconnects everyone's Canvas.
+3. **Screen-follow:** nothing to set; it needs live AI.
+
+Without any of these, Sidecar works exactly as before: guests only, everything in the browser.
 
 ---
 
@@ -146,6 +161,9 @@ End-to-end checks with a real browser (Playwright). Run these against a running 
 ```bash
 node scripts/e2e-demo.mjs /tmp Algebra      # full offline lesson; also Accounting | Chemistry | Economics
 node scripts/e2e-upload.mjs /tmp            # text PDF, scanned PDF, photo, corrupt file, paste, focus mode, phone width
+# With the mock running (see below): memory + spaced review, and screen-follow (MOCK_TURNS=scripts/mock-turns-screen.json)
+node scripts/e2e-memory.mjs /tmp /tmp/mock.log
+node scripts/e2e-screen.mjs /tmp /tmp/mock.log
 # Live path without spending credits: a local mock of the Anthropic API
 node scripts/mock-anthropic.mjs 4010 &
 ANTHROPIC_API_KEY=test ANTHROPIC_BASE_URL=http://localhost:4010 npm start

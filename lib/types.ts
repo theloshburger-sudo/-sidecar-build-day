@@ -31,6 +31,7 @@ export type BoardActionType =
   | "mindmap"
   | "add"
   | "pointTo"
+  | "screenMark"
   | "narrate"
   | "askQuestion"
   | "clear";
@@ -82,7 +83,7 @@ export interface BoardAction {
   credits?: string[];
 }
 
-export type Phase = "diagnose" | "teach" | "check" | "practice" | "wrapup";
+export type Phase = "warmup" | "diagnose" | "teach" | "check" | "practice" | "wrapup";
 export type Verdict = "none" | "correct" | "partial" | "incorrect";
 
 export interface VideoSuggestion {
@@ -105,6 +106,14 @@ export interface TutorTurn {
   verdict: Verdict;
   /** One new observation about how this student learns best ("" if nothing new). */
   insight: string;
+  /** Stable key for the missing concept, set together with gap (empty until known). */
+  concept: ConceptKey;
+}
+
+/** A concept as the tutor names it: kebab-case slug + a short human label. */
+export interface ConceptKey {
+  slug: string;
+  label: string;
 }
 
 export type TeachingFormat = "visual" | "example" | "analogy" | "socratic";
@@ -149,6 +158,12 @@ export interface TutorRequest {
   studentMessage: string;
   /** JPEG data URL of the whiteboard when the student drew on it. */
   image?: string;
-  /** What Teacher has learned about this student (kept on their device). */
+  /** What Teacher has learned about this student (on-device for guests, in their account when signed in). */
   learner?: string[];
+  /** Concepts this student has missed before, so Teacher reuses the same slug for the same idea. */
+  concepts?: ConceptKey[];
+  /** One concept due for spaced review: Teacher opens with a one-question warm-up on it. */
+  review?: ConceptKey;
+  /** JPEG data URL of the student's shared screen right now (screen-follow). */
+  screen?: string;
 }

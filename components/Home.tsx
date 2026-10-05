@@ -3,29 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import Cloud from "./Cloud";
 import TopBar, { StatusPill } from "./TopBar";
+import Account from "./Account";
+import WeakSpots from "./WeakSpots";
+import CanvasPanel, { type CanvasItem } from "./CanvasPanel";
+import { authFetch, useAccount } from "@/lib/account";
+import { screenShareSupported } from "@/lib/screen";
+import type { Recap } from "@/lib/memory";
 import type { AppStatus } from "./SidecarApp";
 import { DEMO_ASSIGNMENTS } from "@/lib/demo";
 import { FileProblem, readAssignmentFile } from "@/lib/files";
 import { splitProblems } from "@/lib/sanitize";
 import type { Assignment, Problem } from "@/lib/types";
-
-export interface Recap {
-  date: string;
-  title: string;
-  subject: string;
-  gap: string;
-  result: string;
-}
-
-export const RECAPS_KEY = "sidecar.recaps.v1";
-
-export function loadRecaps(): Recap[] {
-  try {
-    return JSON.parse(localStorage.getItem(RECAPS_KEY) || "[]") as Recap[];
-  } catch {
-    return [];
-  }
-}
 
 export default function Home({ status, onAssignment }: { status: AppStatus | null; onAssignment: (a: Assignment) => void }) {
   const [busy, setBusy] = useState<string | null>(null);
@@ -36,7 +24,15 @@ export default function Home({ status, onAssignment }: { status: AppStatus | nul
   const [recaps, setRecaps] = useState<Recap[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => setRecaps(loadRecaps().slice(0, 4)), []);
+  const { memory } = useAccount();
+  const [canShare, setCanShare] = useState(false);
+  useEffect(() => setCanShare(screenShareSupported()), []);
+  useEffect(() => {
+    memory
+      ?.recaps()
+      .then((r) => setRecaps(r.slice(0, 4)))
+      .catch(() => setRecaps([]));
+  }, [memory]);
 
   async function handleFile(file: File) {
     setError(null);
@@ -44,12 +40,7 @@ export default function Home({ status, onAssignment }: { status: AppStatus | nul
     try {
       const read = await readAssignmentFile(file, setBusy);
       setBusy(read.images.length ? "Teacher is reading the page…" : "Finding the problems…");
-      const res = await fetch("/api/extract", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: file.name, text: read.text, images: read.images }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { name?: string; problems?: Problem[]; error?: string };
+      const { res, data } = await extract(file.name, read.text, read.images);
       if (!res.ok) {
         // Server unreachable or no key: fall back to local splitting when we have text.
         if (read.text.trim()) return finish(file.name, splitProblems(read.text));
@@ -60,6 +51,34 @@ export default function Home({ status, onAssignment }: { status: AppStatus | nul
       console.error("upload failed", e);
       setBusy(null);
       setError(e instanceof FileProblem ? e.message : "Something went wrong reading that file. Try again, or paste the problem text instead.");
+    }
+  }
+
+  async function extract(name: string, text: string, images: string[] = []) {
+    const res = await fetch("/api/extract", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, text, images }),
+    });
+    const data = (await res.json().catch(() => ({}))) as { name?: string; problems?: Problem[]; error?: string };
+    return { res, data };
+  }
+
+  /** A Canvas assignment: fetch its instructions, then split them like any upload. */
+  async function openCanvas(item: CanvasItem) {
+    setError(null);
+    setBusy(`Getting “${item.name}” from Canvas…`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    try {
+      const r = await authFetch(`/api/canvas/assignment?course=${item.courseId}&id=${item.assignmentId}`);
+      const a = (await r.json().catch(() => ({}))) as { name?: string; text?: string; error?: string };
+      if (!r.ok || !a.text) throw new FileProblem(a.error || "Couldn't get that assignment from Canvas.");
+      setBusy("Finding the problems…");
+      const { res, data } = await extract(a.name || item.name, a.text);
+      finish(res.ok ? data.name || item.name : item.name, res.ok ? data.problems ?? [] : splitProblems(a.text));
+    } catch (e) {
+      setBusy(null);
+      setError(e instanceof FileProblem ? e.message : "Something went wrong getting that from Canvas. Try again.");
     }
   }
 
@@ -86,6 +105,7 @@ export default function Home({ status, onAssignment }: { status: AppStatus | nul
     <div className="page">
       <TopBar>
         <StatusPill status={status} />
+        <Account />
       </TopBar>
 
       <main className="home">
@@ -102,7 +122,7 @@ export default function Home({ status, onAssignment }: { status: AppStatus | nul
               draws it out on a live whiteboard. Interrupt anytime. No judgment, no giving away the answer.
             </p>
             <ul className="trust">
-              <li>🔒 No account. Sidecar never saves your work on a server.</li>
+              <li>🔒 No account needed. Your homework is never saved, only what Teacher learned about you, and only if you sign in.</li>
               <li>📚 Any subject: math, science, history, essays, architecture</li>
               <li>🧠 Learns how you learn, as you go</li>
               <li>🎙️ Type or talk, whichever you like</li>
@@ -158,6 +178,19 @@ export default function Home({ status, onAssignment }: { status: AppStatus | nul
                 <button className="btn btn--ghost" onClick={() => setPasteOpen((v) => !v)}>
                   {pasteOpen ? "Hide text box" : "Paste a problem instead"}
                 </button>
+                {canShare && status?.live && (
+                  <button
+                    className="btn btn--ghost"
+                    onClick={() =>
+                      onAssignment({
+                        name: "Your screen",
+                        problems: [{ id: "screen", title: "What's on my screen", text: "I'm sharing my screen. Help me with the problem that's on it.", subject: "" }],
+                      })
+                    }
+                  >
+                    🖥 Help with what&apos;s on my screen
+                  </button>
+                )}
               </div>
               {pasteOpen && (
                 <div className="paste">
@@ -181,6 +214,10 @@ export default function Home({ status, onAssignment }: { status: AppStatus | nul
             </p>
           )}
         </section>
+
+        <CanvasPanel enabled={Boolean(status?.canvas)} onOpen={openCanvas} />
+
+        <WeakSpots onAssignment={onAssignment} />
 
         <section className="demos">
           <div className="section-head">
@@ -236,7 +273,7 @@ export default function Home({ status, onAssignment }: { status: AppStatus | nul
           </div>
         </section>
       </main>
-      <footer className="foot muted">Built for Build Day #1 · Sidecar keeps your work in your browser.</footer>
+      <footer className="foot muted">Built for Build Day #1 · Guests: everything stays in your browser.</footer>
     </div>
   );
 }

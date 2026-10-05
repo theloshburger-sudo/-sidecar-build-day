@@ -3,7 +3,7 @@ import { chromium } from "playwright";
 import { writeFileSync } from "node:fs";
 const OUT = process.argv[2] || ".";
 const BASE = process.env.BASE_URL || "http://localhost:3000";
-const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" }).catch(() => chromium.launch());
+const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium", args: ["--mute-audio"] }).catch(() => chromium.launch({ args: ["--mute-audio"] }));
 
 // Build test files with the browser itself.
 const maker = await browser.newPage();

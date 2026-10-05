@@ -1,0 +1,14 @@
+[
+  {
+    "assess": "", "verdict": "none",
+    "board": [
+      { "type": "narrate", "text": "I can see your equation right here: two x plus five equals seventeen." },
+      { "type": "screenMark", "kind": "circle", "x": 500, "y": 500, "x2": 0, "y2": 0, "text": "this one", "color": "red" },
+      { "type": "narrate", "text": "Let's copy it onto the board." },
+      { "type": "write", "id": "eq1", "text": "2x + 5 = 17", "zone": "left", "size": "lg", "color": "ink" }
+    ],
+    "say": "I can see your equation right here: two x plus five equals seventeen. Let's copy it onto the board.",
+    "phase": "diagnose", "question": "Where are you stuck?", "choices": ["I don't know how to start"],
+    "gap": "", "concept": { "slug": "", "label": "" }, "plan": [], "step": 0, "videos": [], "practice": "", "insight": ""
+  }
+]
