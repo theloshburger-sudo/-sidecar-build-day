@@ -126,6 +126,15 @@ export class LocalMemory implements MemoryStore {
     this.store.removeItem(LOCAL_KEYS.notes);
   }
 
+  /** Give old recaps (saved before ids existed) a permanent id, so a retried import can't duplicate them. */
+  async recapsWithIds(): Promise<Recap[]> {
+    const recaps = await this.recaps();
+    if (recaps.every((r) => isUuid(r.id))) return recaps;
+    const fixed = recaps.map((r) => (isUuid(r.id) ? r : { ...r, id: newId() }));
+    this.write(LOCAL_KEYS.recaps, fixed);
+    return fixed;
+  }
+
   async forget() {
     Object.values(LOCAL_KEYS).forEach((k) => this.store.removeItem(k));
   }
@@ -232,37 +241,45 @@ export class CloudMemory implements MemoryStore {
     }
   }
 
-  /** First sign-in: bring this browser's guest memory into the account, then clear it locally. */
+  /**
+   * First sign-in: bring this browser's guest memory into the account, then clear it locally.
+   * Safe to run again after a failure: concepts already in the account are left alone (never
+   * re-added), recaps keep fixed ids, notes dedupe. Local data is cleared only after every step worked.
+   */
   async importLocal(local: LocalMemory) {
-    const [concepts, notes, recaps] = await Promise.all([local.concepts(), local.notes(), local.recaps()]);
+    const [concepts, notes, recaps] = await Promise.all([local.concepts(), local.notes(), local.recapsWithIds()]);
     if (!concepts.length && !notes.length && !recaps.length) return false;
     if (concepts.length) {
-      const existing = new Map((await this.concepts()).map((c) => [c.slug, c]));
-      const rows = concepts.map((c) => {
-        const cur = existing.get(c.slug);
-        // Same concept on both sides: add the counts, keep whichever review is sooner.
-        const merged = cur
-          ? { ...c, misses: c.misses + cur.misses, hits: c.hits + cur.hits, step: Math.min(c.step, cur.step), nextReviewAt: [c.nextReviewAt, cur.nextReviewAt].filter(Boolean).sort()[0] ?? null }
-          : c;
-        return {
+      const existing = new Set((await this.concepts()).map((c) => c.slug));
+      const rows = concepts
+        .filter((c) => !existing.has(c.slug))
+        .map((c) => ({
           user_id: this.userId,
-          slug: merged.slug,
-          label: merged.label.slice(0, 120),
-          subject: merged.subject.slice(0, 60),
-          misses: merged.misses,
-          hits: merged.hits,
-          step: merged.step,
-          next_review_at: merged.nextReviewAt,
-          last_seen_at: merged.lastSeenAt,
-        };
-      });
-      const { error } = await this.db.from("sidecar_concepts").upsert(rows, { onConflict: "user_id,slug" });
-      if (error) throw error;
+          slug: c.slug,
+          label: c.label.slice(0, 120),
+          subject: c.subject.slice(0, 60),
+          misses: c.misses,
+          hits: c.hits,
+          step: c.step,
+          next_review_at: c.nextReviewAt,
+          last_seen_at: c.lastSeenAt,
+        }));
+      if (rows.length) {
+        const { error } = await this.db.from("sidecar_concepts").upsert(rows, { onConflict: "user_id,slug", ignoreDuplicates: true });
+        if (error) throw error;
+      }
     }
-    for (const n of [...notes].reverse()) await this.addNote(n);
+    const have = new Set((await this.notes()).map(noteKey));
+    for (const n of [...notes].reverse()) {
+      const clean = cleanNote(n);
+      if (clean.length < 4 || have.has(noteKey(clean))) continue;
+      const { error } = await this.db.from("sidecar_learner_notes").insert({ user_id: this.userId, note: clean });
+      if (error && error.code !== "23505") throw error; // 23505 = already there
+      have.add(noteKey(clean));
+    }
     if (recaps.length) {
       const rows = recaps.map((r) => ({
-        id: isUuid(r.id) ? r.id : newId(),
+        id: r.id as string,
         user_id: this.userId,
         problem_title: r.title.slice(0, 200),
         subject: r.subject.slice(0, 60),

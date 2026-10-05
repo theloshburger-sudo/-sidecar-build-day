@@ -32,27 +32,52 @@ export default function CanvasPanel({ enabled, onOpen }: { enabled: boolean; onO
   const [baseUrl, setBaseUrl] = useState("https://canvas.calpoly.edu");
   const [token, setToken] = useState("");
 
-  const load = useCallback(async () => {
+  const userId = user?.id;
+  const load = useCallback(async (live: () => boolean = () => true) => {
     setError(null);
-    const r = await authFetch("/api/canvas/todo");
-    const data = (await r.json().catch(() => ({}))) as { items?: CanvasItem[]; error?: string; code?: string };
-    if (r.ok) return setItems(data.items ?? []);
-    if (data.code === "not_linked") return setLinked(false);
-    if (data.code === "token_rejected") setLinked(false);
-    setError(data.error ?? "Couldn't load Canvas.");
+    try {
+      const r = await authFetch("/api/canvas/todo");
+      const data = (await r.json().catch(() => ({}))) as { items?: CanvasItem[]; error?: string; code?: string };
+      if (!live()) return;
+      if (r.ok) return setItems(data.items ?? []);
+      if (data.code === "not_linked") return setLinked(false);
+      if (data.code === "token_rejected") setLinked(false);
+      setError(data.error ?? "Couldn't load Canvas.");
+    } catch {
+      if (live()) setError("Couldn't reach Sidecar. Check your connection and refresh.");
+    }
   }, []);
 
   useEffect(() => {
-    if (!enabled || !user) return;
+    // New user (or signed out): forget the previous user's list, and ignore answers that arrive late.
+    setLinked(null);
+    setItems(null);
+    setError(null);
+    if (!enabled || !userId) return;
+    let live = true;
     authFetch("/api/canvas/link")
-      .then((r) => r.json())
-      .then((d: { linked?: boolean; baseUrl?: string }) => {
+      .then(async (r) => {
+        const d = (await r.json().catch(() => ({}))) as { linked?: boolean; baseUrl?: string; error?: string };
+        if (!live) return;
+        if (!r.ok) {
+          setLinked(true); // unknown: don't ask for the token again, show the error instead
+          setItems([]);
+          return setError(d.error ?? "Couldn't check your Canvas connection.");
+        }
         setLinked(Boolean(d.linked));
         if (d.baseUrl) setBaseUrl(d.baseUrl);
-        if (d.linked) void load();
+        if (d.linked) void load(() => live);
       })
-      .catch(() => setLinked(false));
-  }, [enabled, user, load]);
+      .catch(() => {
+        if (!live) return;
+        setLinked(true); // unknown, not "disconnected"
+        setItems([]);
+        setError("Couldn't reach Sidecar. Check your connection and refresh.");
+      });
+    return () => {
+      live = false;
+    };
+  }, [enabled, userId, load]);
 
   if (!enabled || !user || linked === null) return null;
 
@@ -77,7 +102,8 @@ export default function CanvasPanel({ enabled, onOpen }: { enabled: boolean; onO
 
   async function disconnect() {
     if (!confirm("Disconnect Canvas? Sidecar will delete the saved token.")) return;
-    await authFetch("/api/canvas/link", { method: "DELETE" });
+    const r = await authFetch("/api/canvas/link", { method: "DELETE" }).catch(() => null);
+    if (!r?.ok) return setError("Couldn't disconnect just now, so your token is still saved. Try again.");
     setLinked(false);
     setItems(null);
   }
@@ -140,7 +166,7 @@ export default function CanvasPanel({ enabled, onOpen }: { enabled: boolean; onO
             );
           })}
         </ul>
-      ) : items ? (
+      ) : items && !error ? (
         <p className="muted">Nothing due in the next two weeks. 🎉</p>
       ) : null}
       {error && (

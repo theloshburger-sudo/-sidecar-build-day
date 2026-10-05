@@ -14,7 +14,11 @@ export async function startScreenShare(video: HTMLVideoElement): Promise<MediaSt
   video.muted = true;
   await video.play().catch(() => {});
   // The first frame can take a moment to arrive.
-  if (!video.videoWidth) await new Promise((r) => video.addEventListener("loadeddata", r, { once: true }));
+  if (!video.videoWidth) await Promise.race([new Promise((r) => video.addEventListener("loadeddata", r, { once: true })), new Promise((r) => setTimeout(r, 3000))]);
+  if (!video.videoWidth) {
+    stopScreenShare(stream);
+    throw new Error("no frames from the shared screen");
+  }
   return stream;
 }
 

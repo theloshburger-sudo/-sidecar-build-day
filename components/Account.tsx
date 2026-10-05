@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { clearImported, signInWithEmail, signInWithGoogle, signOut, useAccount } from "@/lib/account";
+import { clearImported, memoryChanged, signInWithEmail, signInWithGoogle, signOut, useAccount } from "@/lib/account";
 
 /** Top-bar sign-in / account menu. Renders nothing on guest-only deploys. */
 export default function Account() {
@@ -15,8 +15,13 @@ export default function Account() {
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", esc);
+    };
   }, [open]);
 
   useEffect(() => {
@@ -47,7 +52,7 @@ export default function Account() {
         {user ? `👤 ${user.email?.split("@")[0] ?? "Account"}` : "Sign in"}
       </button>
       {open && (
-        <div className="account-pop card" role="dialog" aria-label={user ? "Your account" : "Sign in"}>
+        <div className="account-pop card" role="region" aria-label={user ? "Your account" : "Sign in"}>
           {user ? (
             <>
               <strong>{user.email}</strong>
@@ -59,7 +64,10 @@ export default function Account() {
                 className="link-back small"
                 disabled={busy}
                 onClick={() => {
-                  if (confirm("Delete everything Teacher remembers about you? This can't be undone.")) void run(async () => memory?.forget(), "Done. Teacher has forgotten everything.");
+                  if (confirm("Delete everything Teacher remembers about you? This can't be undone.")) void run(async () => {
+                      await memory?.forget();
+                      memoryChanged();
+                    }, "Done. Teacher has forgotten everything.");
                 }}
               >
                 Forget everything

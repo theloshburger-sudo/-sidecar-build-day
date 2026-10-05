@@ -57,7 +57,10 @@ export async function POST(req: Request) {
     voiceSpeed: 1,
   } as TutorRequest["preferences"];
   const image = typeof body.image === "string" && body.image.length < 3_000_000 ? body.image : undefined;
-  const screen = typeof body.screen === "string" && body.screen.length < 3_000_000 ? body.screen : undefined;
+  if (typeof body.screen === "string" && body.screen.length >= 3_000_000) {
+    return NextResponse.json({ error: "Your screen snapshot was too large to send. Try sharing a single window instead of the whole screen." }, { status: 413 });
+  }
+  const screen = typeof body.screen === "string" ? body.screen : undefined;
 
   const effort = (["low", "medium", "high"].includes(process.env.ANTHROPIC_EFFORT ?? "") ? process.env.ANTHROPIC_EFFORT : "low") as Effort;
   const messages = toMessages(

@@ -134,7 +134,7 @@ export async function canvasGet<T>(base: string, token: string, path: string): P
   }
   if (res.status >= 300 && res.status < 400) throw new CanvasError("Canvas tried to send us somewhere else. Check the address (it should be your school's Canvas site).", 502, "redirect");
   if (res.status === 401) throw new CanvasError("Canvas didn't accept your token (it may have expired). Reconnect Canvas with a new token.", 401, "token_rejected");
-  if (res.status === 403 || res.status === 404) throw new CanvasError("Canvas wouldn't show that assignment. It may be locked or unpublished.", 404, "not_found");
+  if (res.status === 403 || res.status === 404) throw new CanvasError("Canvas wouldn't share that. It may be locked or unpublished, or turned off at your school.", 404, "not_found");
   if (res.status < 200 || res.status >= 300) throw new CanvasError(`Canvas had a problem (error ${res.status}). Try again in a minute.`, 502, "upstream");
   try {
     return JSON.parse(res.body) as T;

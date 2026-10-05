@@ -24,15 +24,19 @@ export default function Home({ status, onAssignment }: { status: AppStatus | nul
   const [recaps, setRecaps] = useState<Recap[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { memory } = useAccount();
+  const { memory, version } = useAccount();
   const [canShare, setCanShare] = useState(false);
   useEffect(() => setCanShare(screenShareSupported()), []);
   useEffect(() => {
+    let live = true;
     memory
       ?.recaps()
-      .then((r) => setRecaps(r.slice(0, 4)))
-      .catch(() => setRecaps([]));
-  }, [memory]);
+      .then((r) => live && setRecaps(r.slice(0, 4)))
+      .catch(() => live && setRecaps([]));
+    return () => {
+      live = false;
+    };
+  }, [memory, version]);
 
   async function handleFile(file: File) {
     setError(null);

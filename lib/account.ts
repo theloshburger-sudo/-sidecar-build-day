@@ -17,9 +17,11 @@ export interface AccountState {
   memory: MemoryStore | null;
   /** Set right after a sign-in brought guest memory into the account. */
   imported: boolean;
+  /** Bumped when stored memory changes outside a session (e.g. "Forget everything"), so lists reload. */
+  version: number;
 }
 
-const SERVER: AccountState = { ready: false, configured: Boolean(supabase), user: null, memory: null, imported: false };
+const SERVER: AccountState = { ready: false, configured: Boolean(supabase), user: null, memory: null, imported: false, version: 0 };
 let state = SERVER;
 const listeners = new Set<() => void>();
 let started = false;
@@ -29,9 +31,19 @@ function set(next: Partial<AccountState>) {
   listeners.forEach((l) => l());
 }
 
+// Supabase reports the same sign-in twice on load (getSession + INITIAL_SESSION/SIGNED_IN).
+// Run one apply at a time so the guest import can never happen twice.
+let chain: Promise<void> = Promise.resolve();
+const applyQueued = (user: User | null) => {
+  chain = chain.then(() => apply(user)).catch((e) => console.warn("account update failed", e));
+};
+
 async function apply(user: User | null) {
   const local = new LocalMemory(window.localStorage);
-  if (!user || !supabase) return set({ ready: true, user: null, memory: local });
+  if (!user || !supabase) {
+    if (state.ready && !state.user && state.memory?.kind === "local") return;
+    return set({ ready: true, user: null, memory: local });
+  }
   if (state.user?.id === user.id && state.memory?.kind === "cloud") return;
   const cloud = new CloudMemory(supabase, user.id);
   let imported = false;
@@ -50,10 +62,10 @@ function start() {
     set({ ready: true, memory: new LocalMemory(window.localStorage) });
     return;
   }
-  supabase.auth.getSession().then(({ data }) => apply(data.session?.user ?? null));
+  supabase.auth.getSession().then(({ data }) => applyQueued(data.session?.user ?? null));
   supabase.auth.onAuthStateChange((_event, session) => {
     // Supabase warns against awaiting other calls inside this callback.
-    setTimeout(() => void apply(session?.user ?? null), 0);
+    setTimeout(() => applyQueued(session?.user ?? null), 0);
   });
 }
 
@@ -87,6 +99,11 @@ export async function signOut() {
 
 export function clearImported() {
   set({ imported: false });
+}
+
+/** Tell lists that read memory (weak spots, recaps) to reload. */
+export function memoryChanged() {
+  set({ version: state.version + 1 });
 }
 
 /** fetch() with the signed-in student's token, for routes that act as them (Canvas). */

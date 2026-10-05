@@ -64,3 +64,13 @@ test("newId makes v4 UUIDs (the database's session id type)", async () => {
   const { newId } = await import("../lib/memory");
   assert.match(newId(), /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 });
+
+test("old recaps get a permanent id before import, so a retried import can't duplicate them", async () => {
+  const s = fakeStorage();
+  s.setItem("sidecar.recaps.v1", JSON.stringify([{ date: "2026-09-20T10:00:00.000Z", title: "Old", subject: "", gap: "", result: "Finished" }]));
+  const mem = new LocalMemory(s);
+  const first = await mem.recapsWithIds();
+  const second = await mem.recapsWithIds();
+  assert.match(first[0].id!, /^[0-9a-f-]{36}$/);
+  assert.equal(second[0].id, first[0].id);
+});
