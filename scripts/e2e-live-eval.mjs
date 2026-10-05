@@ -284,7 +284,7 @@ async function drive(page, sess, dir) {
   return { session: sess.name, errors, turns };
 }
 
-const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" }).catch(() => chromium.launch());
+const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium", args: ["--mute-audio"] }).catch(() => chromium.launch({ args: ["--mute-audio"] }));
 const results = [];
 for (const sess of SESSIONS.filter((s) => !only.length || only.includes(s.name))) {
   try {

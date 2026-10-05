@@ -5,7 +5,7 @@ import TopBar, { StatusPill } from "./TopBar";
 import MathText from "./MathText";
 import type { AppStatus, Engine } from "./SidecarApp";
 import { getDemo } from "@/lib/demo";
-import { forgetLearner, loadLearner } from "@/lib/profile";
+import { useAccount } from "@/lib/account";
 import type { Assignment, Preferences, Problem } from "@/lib/types";
 
 export default function ProblemPicker({
@@ -31,7 +31,10 @@ export default function ProblemPicker({
   const live = Boolean(status?.live);
   const [preferDemo, setPreferDemo] = useState(false);
   const [learner, setLearner] = useState<string[]>([]);
-  useEffect(() => setLearner(loadLearner()), []);
+  const { memory } = useAccount();
+  useEffect(() => {
+    memory?.notes().then(setLearner).catch(() => setLearner([]));
+  }, [memory]);
 
   const hasScript = (p: Problem | null) => Boolean(p && demo && demo.lesson.problemId === p.id);
   const engineFor = (p: Problem | null): Engine | null => {
@@ -100,7 +103,7 @@ export default function ProblemPicker({
                 <button
                   className="link-back small"
                   onClick={() => {
-                    forgetLearner();
+                    memory?.forgetNotes().catch((e) => console.warn("memory write failed", e));
                     setLearner([]);
                   }}
                 >

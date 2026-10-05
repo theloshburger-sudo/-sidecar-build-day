@@ -3,29 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import Cloud from "./Cloud";
 import TopBar, { StatusPill } from "./TopBar";
+import Account from "./Account";
+import WeakSpots from "./WeakSpots";
+import { useAccount } from "@/lib/account";
+import type { Recap } from "@/lib/memory";
 import type { AppStatus } from "./SidecarApp";
 import { DEMO_ASSIGNMENTS } from "@/lib/demo";
 import { FileProblem, readAssignmentFile } from "@/lib/files";
 import { splitProblems } from "@/lib/sanitize";
 import type { Assignment, Problem } from "@/lib/types";
-
-export interface Recap {
-  date: string;
-  title: string;
-  subject: string;
-  gap: string;
-  result: string;
-}
-
-export const RECAPS_KEY = "sidecar.recaps.v1";
-
-export function loadRecaps(): Recap[] {
-  try {
-    return JSON.parse(localStorage.getItem(RECAPS_KEY) || "[]") as Recap[];
-  } catch {
-    return [];
-  }
-}
 
 export default function Home({ status, onAssignment }: { status: AppStatus | null; onAssignment: (a: Assignment) => void }) {
   const [busy, setBusy] = useState<string | null>(null);
@@ -36,7 +22,13 @@ export default function Home({ status, onAssignment }: { status: AppStatus | nul
   const [recaps, setRecaps] = useState<Recap[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => setRecaps(loadRecaps().slice(0, 4)), []);
+  const { memory } = useAccount();
+  useEffect(() => {
+    memory
+      ?.recaps()
+      .then((r) => setRecaps(r.slice(0, 4)))
+      .catch(() => setRecaps([]));
+  }, [memory]);
 
   async function handleFile(file: File) {
     setError(null);
@@ -86,6 +78,7 @@ export default function Home({ status, onAssignment }: { status: AppStatus | nul
     <div className="page">
       <TopBar>
         <StatusPill status={status} />
+        <Account />
       </TopBar>
 
       <main className="home">
@@ -102,7 +95,7 @@ export default function Home({ status, onAssignment }: { status: AppStatus | nul
               draws it out on a live whiteboard. Interrupt anytime. No judgment, no giving away the answer.
             </p>
             <ul className="trust">
-              <li>🔒 No account. Sidecar never saves your work on a server.</li>
+              <li>🔒 No account needed. Your homework is never saved, only what Teacher learned about you, and only if you sign in.</li>
               <li>📚 Any subject: math, science, history, essays, architecture</li>
               <li>🧠 Learns how you learn, as you go</li>
               <li>🎙️ Type or talk, whichever you like</li>
@@ -182,6 +175,8 @@ export default function Home({ status, onAssignment }: { status: AppStatus | nul
           )}
         </section>
 
+        <WeakSpots onAssignment={onAssignment} />
+
         <section className="demos">
           <div className="section-head">
             <h2>No assignment handy? Try a sample</h2>
@@ -236,7 +231,7 @@ export default function Home({ status, onAssignment }: { status: AppStatus | nul
           </div>
         </section>
       </main>
-      <footer className="foot muted">Built for Build Day #1 · Sidecar keeps your work in your browser.</footer>
+      <footer className="foot muted">Built for Build Day #1 · Guests: everything stays in your browser.</footer>
     </div>
   );
 }

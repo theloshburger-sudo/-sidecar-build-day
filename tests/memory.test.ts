@@ -59,3 +59,8 @@ test("reads the old on-device keys (notes and recaps from before accounts)", asy
   assert.deepEqual(await mem.notes(), ["Likes analogies"]);
   assert.equal((await mem.recaps())[0].title, "Old");
 });
+
+test("newId makes v4 UUIDs (the database's session id type)", async () => {
+  const { newId } = await import("../lib/memory");
+  assert.match(newId(), /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+});

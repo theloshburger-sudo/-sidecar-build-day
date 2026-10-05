@@ -1,7 +1,7 @@
 import { chromium } from "playwright";
 const SP = process.argv[2];
 const demo = process.argv[3] || "Algebra";
-const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" }).catch(() => chromium.launch());
+const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium", args: ["--mute-audio"] }).catch(() => chromium.launch({ args: ["--mute-audio"] }));
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 const errors = [];
 page.on("pageerror", (e) => errors.push("pageerror: " + e.message + " | " + (e.stack || "").split("\n").slice(0, 3).join(" | ")));

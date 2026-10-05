@@ -51,7 +51,7 @@ const turns = process.env.MOCK_NUMBERLINE === "1" ? [numberLineTurn] : [
       { type: "point", target: "g1", x: 2, y: -3, text: "" },
     ],
     question: "What is −b ÷ 2a here?",
-    choices: [], gap: "Vertex formula x = −b/2a", plan: ["Find a and b", "Use −b/2a", "Plug in for y"], step: 1,
+    choices: [], gap: "Vertex formula x = −b/2a", concept: { slug: "vertex-formula", label: "Vertex formula" }, plan: ["Find a and b", "Use −b/2a", "Plug in for y"], step: 1,
     videos: [{ title: "Vertex of a parabola", query: "find vertex of parabola -b/2a" }], practice: "", verdict: "correct",
   },
 ];
@@ -65,7 +65,7 @@ createServer((req, res) => {
   req.on("end", () => {
     const json = body ? JSON.parse(body) : {};
     const hasFormat = Boolean(json.output_config?.format);
-    if (log) appendFileSync(log, JSON.stringify({ path: req.url, model: json.model, effort: json.output_config?.effort, hasFormat, nMessages: json.messages?.length, lastRole: json.messages?.at(-1)?.role }) + "\n");
+    if (log) appendFileSync(log, JSON.stringify({ path: req.url, model: json.model, effort: json.output_config?.effort, hasFormat, nMessages: json.messages?.length, lastRole: json.messages?.at(-1)?.role, warmup: /Due for a warm-up/.test(JSON.stringify(json.messages ?? [])), knownConcepts: /Concepts I've missed before/.test(JSON.stringify(json.messages ?? [])) }) + "\n");
     if (REJECT_SCHEMA_ONCE && hasFormat && !rejected) {
       rejected = true;
       res.writeHead(400, { "content-type": "application/json" });

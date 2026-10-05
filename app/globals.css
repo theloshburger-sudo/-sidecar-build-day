@@ -1555,3 +1555,25 @@ sub { top: 0.25em; }
 .new-problem { display: inline-flex; align-items: center; gap: 6px; flex: 1 1 360px; min-width: 0; max-width: 560px; }
 .new-problem input { flex: 1; min-width: 0; border: 1px solid var(--primary); border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 13.5px; box-shadow: 0 0 0 3px var(--primary-soft); }
 .new-problem input:focus { outline: none; }
+
+/* Account menu */
+.account { position: relative; }
+.account-pop { position: absolute; right: 0; top: calc(100% + 8px); z-index: 40; width: min(320px, calc(100vw - 32px)); padding: 14px 16px; display: grid; gap: 10px; box-shadow: 0 18px 40px rgba(31, 45, 58, 0.16); font-size: 14px; }
+.account-pop p { margin: 0; }
+.account-email { display: grid; gap: 8px; }
+.account-email input { font: inherit; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--soft); color: var(--ink); }
+
+/* Weak spots (spaced review) */
+.spot-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.spot { padding: 14px 16px; display: grid; gap: 6px; align-content: start; }
+.spot .tag { justify-self: start; }
+.spot .btn { justify-self: start; }
+.spot-review { padding: 6px 14px; font-size: 13px; }
+.spot--due { border-color: var(--warn); background: linear-gradient(var(--warn-soft), #fff 70%); }
+.spot--mastered { opacity: 0.75; }
+.spot-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.spot-ladder { display: inline-flex; gap: 3px; }
+.spot-ladder i { width: 14px; height: 6px; border-radius: 3px; background: var(--line); }
+.spot-ladder i.on { background: var(--ok); }
+.weak-spots .link-back { margin-top: 10px; }
+@media (max-width: 640px) { .spot-list { grid-template-columns: 1fr; } }

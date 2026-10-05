@@ -33,6 +33,7 @@ export interface MemoryStore {
   recordSession(r: SessionRecord): Promise<void>;
   /** Returns the updated notes, or null if the note wasn't new. */
   addNote(note: string): Promise<string[] | null>;
+  forgetNotes(): Promise<void>;
   forget(): Promise<void>;
 }
 
@@ -121,6 +122,10 @@ export class LocalMemory implements MemoryStore {
     return next;
   }
 
+  async forgetNotes() {
+    this.store.removeItem(LOCAL_KEYS.notes);
+  }
+
   async forget() {
     Object.values(LOCAL_KEYS).forEach((k) => this.store.removeItem(k));
   }
@@ -147,6 +152,16 @@ const fromRow = (r: ConceptRow): Concept => ({
   nextReviewAt: r.next_review_at,
   lastSeenAt: r.last_seen_at,
 });
+
+/** UUID v4. crypto.randomUUID only exists on https/localhost, so fall back to getRandomValues. */
+export function newId(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
 
 const isUuid = (s?: string) => !!s && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 
@@ -206,6 +221,10 @@ export class CloudMemory implements MemoryStore {
     if (data?.length) await this.db.from("sidecar_learner_notes").delete().in("id", data.map((d) => d.id));
     return [clean, ...existing].slice(0, MAX_NOTES);
   }
+  async forgetNotes() {
+    const { error } = await this.db.from("sidecar_learner_notes").delete().eq("user_id", this.userId);
+    if (error) throw error;
+  }
   async forget() {
     for (const t of ["sidecar_concepts", "sidecar_sessions", "sidecar_learner_notes"]) {
       const { error } = await this.db.from(t).delete().eq("user_id", this.userId);
@@ -243,7 +262,7 @@ export class CloudMemory implements MemoryStore {
     for (const n of [...notes].reverse()) await this.addNote(n);
     if (recaps.length) {
       const rows = recaps.map((r) => ({
-        id: isUuid(r.id) ? r.id : crypto.randomUUID(),
+        id: isUuid(r.id) ? r.id : newId(),
         user_id: this.userId,
         problem_title: r.title.slice(0, 200),
         subject: r.subject.slice(0, 60),

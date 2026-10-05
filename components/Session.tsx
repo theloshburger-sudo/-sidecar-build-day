@@ -6,7 +6,6 @@ import TopBar, { StatusPill } from "./TopBar";
 import Whiteboard, { type WhiteboardHandle } from "./Whiteboard";
 import VideoCards from "./VideoCards";
 import MathText from "./MathText";
-import { RECAPS_KEY, loadRecaps } from "./Home";
 import type { AppStatus, Engine } from "./SidecarApp";
 import { applyActions, boardHeight, describeBoard, emptyBoard, BOARD_MIN_H, type BoardState, type Measure, type Prim } from "@/lib/board";
 import { cueFractions, pointerFits, shiftMarks } from "@/lib/cue";
@@ -17,8 +16,10 @@ import { DEFAULT_VOICE, NATURAL_VOICES } from "@/lib/voices";
 import { BeatBuilder, beatsFromTurn, type Beat } from "@/lib/narration";
 import { BoardStreamParser, STREAM_ERROR } from "@/lib/stream-parse";
 import { normalizeTurn } from "@/lib/sanitize";
-import { addInsight, forgetLearner, loadLearner } from "@/lib/profile";
-import type { Assignment, BoardAction, ChatEntry, Phase, Preferences, Problem, TutorTurn, VideoSuggestion } from "@/lib/types";
+import { useAccount } from "@/lib/account";
+import { newId } from "@/lib/memory";
+import { dueConcept, type ConceptRef } from "@/lib/review";
+import type { Assignment, BoardAction, ChatEntry, ConceptKey, Phase, Preferences, Problem, TutorTurn, VideoSuggestion } from "@/lib/types";
 
 const PHASES: { id: Phase; label: string }[] = [
   { id: "diagnose", label: "Find the gap" },
@@ -119,7 +120,19 @@ export default function Session({
   const [learnerOpen, setLearnerOpen] = useState(false);
   const learnerRef = useRef<string[]>([]);
   learnerRef.current = learner;
-  useEffect(() => setLearner(loadLearner()), []);
+
+  // Memory: concepts this student missed before + the one due for a warm-up.
+  const account = useAccount();
+  const memoryRef = useRef(account.memory);
+  memoryRef.current = account.memory;
+  const [sid] = useState(newId);
+  const sessionId = useRef(sid);
+  const conceptsRef = useRef<ConceptKey[]>([]);
+  const reviewRef = useRef<ConceptRef | null>(null);
+  /** A warm-up question is waiting for the student's answer. */
+  const warmupPending = useRef(false);
+  const conceptRecorded = useRef(false);
+  const remember = (p: Promise<unknown> | undefined) => void p?.catch((e) => console.warn("memory write failed", e));
 
   const wb = useRef<WhiteboardHandle>(null);
   const board = useRef<BoardState>(emptyBoard());
@@ -379,14 +392,37 @@ export default function Session({
   /** Record a finished turn: history, progress, celebration. */
   const finishTurn = useCallback((turn: TutorTurn) => {
     pushHistory({ role: "tutor", turn });
-    if (turn.insight) {
-      const next = addInsight(turn.insight);
-      if (next) {
-        setLearner(next);
-        setLearnerNew(true);
-        setNotice(`🧠 Teacher learned: ${turn.insight}`);
-        setTimeout(() => setLearnerNew(false), 3200);
+    const mem = memoryRef.current;
+    if (turn.insight && mem && !lesson) {
+      mem
+        .addNote(turn.insight)
+        .then((next) => {
+          if (!next) return;
+          setLearner(next);
+          setLearnerNew(true);
+          setNotice(`🧠 Teacher learned: ${turn.insight}`);
+          setTimeout(() => setLearnerNew(false), 3200);
+        })
+        .catch((e) => console.warn("memory write failed", e));
+    }
+    const review = reviewRef.current;
+    let gradingWarmup = false;
+    if (warmupPending.current && turn.phase !== "warmup") {
+      warmupPending.current = false;
+      gradingWarmup = true;
+      if (review && turn.verdict !== "none") {
+        const hit = turn.verdict === "correct";
+        remember(mem?.recordSession({ id: newId(), title: `Warm-up: ${review.label}`, subject: review.subject, concept: review, event: hit ? "hit" : "miss", result: hit ? "Warm-up ✓" : "Warm-up: needs another look" }));
       }
+    }
+    if (turn.phase === "warmup") warmupPending.current = true;
+    // The idea this session is really about: a miss, so it comes back for review in 2 days.
+    const c = turn.concept;
+    if (c?.slug && !lesson && !conceptRecorded.current && turn.phase !== "warmup" && !(gradingWarmup && c.slug === review?.slug)) {
+      conceptRecorded.current = true;
+      const ref = { ...c, subject: problem.subject || review?.subject || "" };
+      if (!conceptsRef.current.some((k) => k.slug === c.slug)) conceptsRef.current = [{ slug: c.slug, label: c.label }, ...conceptsRef.current];
+      remember(mem?.recordSession({ id: sessionId.current, title: problem.title, subject: ref.subject, gap: turn.gap, concept: ref, event: "miss" }));
     }
     if (turn.plan.length) setPlan(turn.plan);
     if (turn.gap) setGap(turn.gap);
@@ -396,7 +432,7 @@ export default function Session({
       setHappy(true);
       setTimeout(() => setHappy(false), 2600);
     }
-  }, []);
+  }, [lesson, problem]);
 
   /** Interrupt whatever Teacher is saying/drawing. */
   const interrupt = useCallback(() => {
@@ -444,6 +480,8 @@ export default function Session({
             studentMessage: text ?? "",
             image,
             learner: learnerRef.current,
+            concepts: conceptsRef.current.slice(0, 30),
+            review: reviewRef.current ? { slug: reviewRef.current.slug, label: reviewRef.current.label } : undefined,
           }),
         });
         if (!res.ok || !res.body) {
@@ -508,10 +546,23 @@ export default function Session({
 
   // Kick off the session once fonts are ready (so handwriting measures correctly).
   useEffect(() => {
-    if (started.current) return;
+    if (started.current || !account.ready) return;
     started.current = true;
-    const go = () => {
+    const go = async () => {
       measure.current = makeMeasure();
+      const mem = memoryRef.current;
+      if (mem && !lesson) {
+        try {
+          const [notes, concepts] = await Promise.all([mem.notes(), mem.concepts()]);
+          setLearner(notes);
+          conceptsRef.current = concepts.filter((k) => k.subject.toLowerCase() === problem.subject.toLowerCase()).concat(concepts.filter((k) => k.subject.toLowerCase() !== problem.subject.toLowerCase())).map((k) => ({ slug: k.slug, label: k.label }));
+          // A review session is the warm-up itself; otherwise warm up on whatever is due.
+          const forced = problem.id.startsWith("review:") ? concepts.find((k) => `review:${k.slug}` === problem.id) : null;
+          reviewRef.current = initialEngine === "live" ? forced ?? dueConcept(concepts, problem.subject) : null;
+        } catch (e) {
+          console.warn("couldn't load memory", e);
+        }
+      }
       askTutor(null, initialEngine);
     };
     const fam = getComputedStyle(document.documentElement).getPropertyValue("--font-hand").trim();
@@ -522,7 +573,7 @@ export default function Session({
       stopSpeaking();
       recognizer.current?.abort();
     };
-  }, [askTutor, initialEngine]);
+  }, [askTutor, initialEngine, account.ready]);
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
@@ -533,16 +584,11 @@ export default function Session({
     if (history.length === 3) setShowProblem(false);
   }, [history.length]);
 
-  // Remember finished sessions on this device.
+  // Remember finished sessions (same session id, so a later practice result updates it in place).
   useEffect(() => {
-    if (lastTutor?.phase !== "wrapup") return;
-    try {
-      const recaps = loadRecaps();
-      if (recaps[0]?.title === problem.title && Date.now() - new Date(recaps[0].date).getTime() < 60_000) return;
-      recaps.unshift({ date: new Date().toISOString(), title: problem.title, subject: problem.subject, gap, result: practiceResult ?? "Finished" });
-      localStorage.setItem(RECAPS_KEY, JSON.stringify(recaps.slice(0, 20)));
-    } catch {}
-  }, [lastTutor, problem, gap, practiceResult]);
+    if (lastTutor?.phase !== "wrapup" || lesson) return;
+    remember(memoryRef.current?.recordSession({ id: sessionId.current, title: problem.title, subject: problem.subject, gap, result: practiceResult ?? "Finished" }));
+  }, [lastTutor, problem, gap, practiceResult, lesson]);
 
   // ---------------------------------------------------------------- student input
   const send = useCallback(
@@ -701,7 +747,7 @@ export default function Session({
   const lastBeatIdx = beatLines.reduce((acc, l, i) => (l ? i : acc), -1);
   const mood: Mood = listening ? "listening" : thinking ? "thinking" : happy ? "happy" : speaking || boardBusy ? "talking" : "idle";
   const focus = prefs.focus;
-  const phaseIdx = PHASES.findIndex((p) => p.id === phase);
+  const phaseIdx = Math.max(0, PHASES.findIndex((p) => p.id === phase)); // a warm-up counts as the first step
   const done = phase === "wrapup";
   const micOk = typeof window !== "undefined" && speechRecognitionSupported();
 
@@ -916,12 +962,14 @@ export default function Session({
                     ) : (
                       <p className="muted">Nothing yet. Ask questions and answer in your own words, and Teacher will adapt.</p>
                     )}
-                    <p className="muted small">Saved only on this device. Teacher uses it to tailor explanations.</p>
+                    <p className="muted small">
+                      {account.memory?.kind === "cloud" ? "Saved to your account." : "Saved only on this device."} Teacher uses it to tailor explanations.
+                    </p>
                     {learner.length > 0 && (
                       <button
                         className="link-back small"
                         onClick={() => {
-                          forgetLearner();
+                          remember(memoryRef.current?.forgetNotes());
                           setLearner([]);
                         }}
                       >
@@ -1115,6 +1163,11 @@ export default function Session({
             </form>
             {!done && (
               <div className="quick">
+                {lastTutor?.phase === "warmup" && (
+                  <button className="quick-chip" onClick={() => send("Skip the warm-up")} disabled={thinking || streaming}>
+                    Skip the warm-up
+                  </button>
+                )}
                 {QUICK.map((q) => (
                   <button key={q} className="quick-chip" onClick={() => send(q)} disabled={thinking || !lastTutor}>
                     {q}
@@ -1130,6 +1183,9 @@ export default function Session({
                 <button className="btn btn--ghost" onClick={downloadRecap}>
                   ⬇ Save my recap
                 </button>
+                {account.configured && account.ready && !account.user && !lesson && (
+                  <p className="muted small">Want Teacher to remember this next time on any device? Sign in from the home page.</p>
+                )}
               </div>
             )}
           </div>
