@@ -166,4 +166,6 @@ export interface TutorRequest {
   review?: ConceptKey;
   /** JPEG data URL of the student's shared screen right now (screen-follow). */
   screen?: string;
+  /** Pixel size of that screenshot: screenMark coordinates are in these pixels. */
+  screenSize?: { w: number; h: number };
 }

@@ -22,8 +22,11 @@ export async function startScreenShare(video: HTMLVideoElement): Promise<MediaSt
   return stream;
 }
 
-/** The current frame as a JPEG data URL, at most 1280 px wide (enough to read, small to send). */
-export function captureFrame(video: HTMLVideoElement, maxW = 1280): string | null {
+/**
+ * The current frame as a JPEG, at most 1456 px wide: about the most detail Claude keeps from an
+ * image (larger ones are scaled down on arrival), so small text on a homework page stays readable.
+ */
+export function captureFrame(video: HTMLVideoElement, maxW = 1456): { url: string; w: number; h: number } | null {
   const w = video.videoWidth;
   const h = video.videoHeight;
   if (!w || !h) return null;
@@ -32,7 +35,7 @@ export function captureFrame(video: HTMLVideoElement, maxW = 1280): string | nul
   c.width = Math.round(w * scale);
   c.height = Math.round(h * scale);
   c.getContext("2d")?.drawImage(video, 0, 0, c.width, c.height);
-  return c.toDataURL("image/jpeg", 0.75);
+  return { url: c.toDataURL("image/jpeg", 0.85), w: c.width, h: c.height };
 }
 
 export function stopScreenShare(stream: MediaStream | null) {

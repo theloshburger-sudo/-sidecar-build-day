@@ -1,6 +1,7 @@
 // Groups board actions into "beats": one short spoken line + exactly the strokes drawn
 // while it's said. This keeps what Teacher says in step with what Teacher draws.
 
+import { checkAction } from "./mathcheck";
 import type { BoardAction, TutorTurn } from "./types";
 
 export interface Beat {
@@ -20,7 +21,7 @@ export class BeatBuilder {
       return;
     }
     if (!this.beats.length) this.beats.push({ text: "", actions: [] });
-    this.beats[this.beats.length - 1].actions.push(a);
+    this.beats[this.beats.length - 1].actions.push(checkAction(a));
   }
 
   end() {

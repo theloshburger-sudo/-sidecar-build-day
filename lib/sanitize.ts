@@ -1,3 +1,4 @@
+import { checkAction } from "./mathcheck";
 import { toSlug } from "./review";
 import type { BoardAction, ConceptKey, Phase, Problem, TutorTurn, Verdict } from "./types";
 
@@ -14,7 +15,7 @@ export function normalizeTurn(raw: unknown): TutorTurn {
   const verdict = VERDICTS.includes(r.verdict as Verdict) ? (r.verdict as Verdict) : "none";
   const board = arr(r.board)
     .filter((b): b is BoardAction => !!b && typeof b === "object" && typeof (b as BoardAction).type === "string")
-    .map((b) => (b.type === "screenMark" ? normalizeScreenMark(b) : b))
+    .map((b) => (b.type === "screenMark" ? normalizeScreenMark(b) : checkAction(b)))
     .slice(0, 40);
   return {
     say:
@@ -47,9 +48,9 @@ export function normalizeTurn(raw: unknown): TutorTurn {
 
 const MARK_KINDS = ["circle", "arrow", "box", "label"];
 const COLORS = ["ink", "blue", "green", "red", "purple", "orange"];
-const grid = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.max(0, Math.min(1000, Math.round(v))) : 0);
+const grid = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.max(0, Math.min(4000, Math.round(v))) : 0);
 
-/** A mark on the student's shared screen, on a 0–1000 grid over the screenshot (x across, y down). */
+/** A mark on the student's shared screen, in the screenshot's pixels (x across, y down). */
 export function normalizeScreenMark(raw: unknown): BoardAction {
   const m = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   return {

@@ -44,6 +44,8 @@ You'll get notes on how this student learns best (from earlier turns and session
 - "question" is the one thing you want them to do or answer now (or "" if none). Usually "Your turn: …".
 - Don't claim fixed "learning styles". The student picked a preferred starting format; adapt based on what actually helps in this session.
 - Videos: suggest 1–2 YouTube searches in "videos" ONLY when truly useful (e.g. they're still stuck after a reteach, or at wrapup). Make the query precise (e.g. "completing the square visual explanation"). Otherwise [].
+- NUMBERS MUST BE RIGHT. Every result you say or write (a sum, a difference, a total) must be one YOU just computed from the givens, digit by digit. Never write "a + b = c" unless you checked c. If a number on the student's screen or in their message doesn't match your own calculation, it's their mistake to point out, not a fact.
+- GIVENS vs ANSWERS: givens are the problem's data (tables, word problem numbers). Anything already typed into an answer box, blank or "Total" cell is the STUDENT'S ANSWER: check it, never copy it as a given or treat it as correct.
 - GRADE BEFORE YOU SPEAK. "assess" comes first in your reply: one short line with the student's latest answer, the correct answer YOU worked out yourself, and whether they match (e.g. "Student: 14. Correct: 22 − 7 = 15. Wrong: subtraction slip."). Use "" only when the student didn't answer anything (a question, "why?", a choice like "I don't know how to start").
 - "verdict" (right after "assess") must agree with it: correct / partial / incorrect, or "none". Your first narrate line must match the verdict:
     incorrect → say plainly and kindly that it's not right ("Not quite: 22 minus 7 is 15, not 14."), point at the exact spot (pointTo or circle), give the next rung of the hint ladder, and ask them to try again. NEVER praise or say "nice"/"good"/"great" about a wrong answer, and never move on to the next step as if it were right.
@@ -74,7 +76,7 @@ Example (pointing back): narrate "Look at the 22 on the right side: we still hav
 Example (asking): narrate "So what goes in this blank?" → pointTo {target "eq2", match "__", text "your turn"}
 # The student's shared screen
 Sometimes the student shares their screen (a Canvas page, Desmos, a PDF, an online quiz, a coding exercise). Then the last message includes a screenshot labeled "the student's shared screen". Teach from what's actually on it: read it carefully, and when the problem is on the screen, treat it as THE problem. Point at the screen with "screenMark" so they know exactly where to look, in the same beat as the sentence that names it:
-- screenMark {kind: "circle" | "box" | "arrow" | "label", x, y, x2, y2, text, color} — coordinates on a 0–1000 grid over the screenshot (x from the left edge, y from the top). circle: center x,y. box: corners (x,y) and (x2,y2). arrow: from (x,y) to the target (x2,y2). label: text at x,y. Unused coordinates are 0. Keep text to 1–4 words. Be precise: aim at the exact field, button, number or line you're talking about.
+- screenMark {kind: "circle" | "box" | "arrow" | "label", x, y, x2, y2, text, color} — coordinates are PIXELS in the screenshot (its size is given with it; x from the left edge, y from the top). Prefer "box" tightly around the exact cell, number, field or line: (x,y) top-left and (x2,y2) bottom-right. circle: center x,y, for one small thing. arrow: from (x,y) in empty space to the target (x2,y2). label: a note at x,y. Unused coordinates are 0. text is 1–3 words or "" (the label is drawn beside the mark, never over it). Find the exact spot before marking: read the pixels around it. One or two marks per beat, never a mark on something you aren't talking about.
 - Use the whiteboard as usual for the explanation itself (worked steps, pictures). The screen marks are for "look here"; never redraw the whole screen on the board.
 - If something isn't readable, say so and ask them to zoom in or scroll, rather than guessing.
 
@@ -166,6 +168,7 @@ export function toMessages(
   concepts: ConceptKey[] = [],
   review?: ConceptKey,
   screen?: string,
+  screenSize?: { w: number; h: number },
 ): { role: "user" | "assistant"; content: MessageContent }[] {
   const base = textMessages(problem, prefs, history, boardSummary, studentMessage, learner, concepts, review);
   const parse = (url?: string) => (url ? /^data:(image\/(?:jpeg|png));base64,([A-Za-z0-9+/=]+)$/.exec(url) : null);
@@ -174,8 +177,9 @@ export function toMessages(
   if (!scr && !ink) return base;
   const last = base[base.length - 1];
   const img = (m: RegExpExecArray) => ({ type: "image" as const, source: { type: "base64" as const, media_type: m[1] as ImageMedia, data: m[2] } });
+  const size = screenSize ? ` It is ${screenSize.w}×${screenSize.h} pixels: give screenMark x/y in these pixels.` : "";
   const notes = [
-    scr && (ink ? "[First image: the student's shared screen right now.]" : "[Image above: the student's shared screen right now.]"),
+    scr && (ink ? `[First image: the student's shared screen right now.${size}]` : `[Image above: the student's shared screen right now.${size}]`),
     ink && (scr ? "[Second image: the whiteboard right now. The student's own drawing is in GREEN ink.]" : "[Image above: the whiteboard right now. The student's own drawing is in GREEN ink.]"),
   ].filter(Boolean);
   return [

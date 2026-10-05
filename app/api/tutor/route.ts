@@ -61,6 +61,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Your screen snapshot was too large to send. Try sharing a single window instead of the whole screen." }, { status: 413 });
   }
   const screen = typeof body.screen === "string" ? body.screen : undefined;
+  const sw = Math.round(Number(body.screenSize?.w));
+  const sh = Math.round(Number(body.screenSize?.h));
+  const screenSize = sw > 0 && sh > 0 && sw <= 4000 && sh <= 4000 ? { w: sw, h: sh } : undefined;
 
   const effort = (["low", "medium", "high"].includes(process.env.ANTHROPIC_EFFORT ?? "") ? process.env.ANTHROPIC_EFFORT : "low") as Effort;
   const messages = toMessages(
@@ -77,6 +80,7 @@ export async function POST(req: Request) {
     (Array.isArray(body.concepts) ? body.concepts : []).slice(0, 30).map(normalizeConcept).filter((c) => c.slug),
     normalizeConcept(body.review).slug ? normalizeConcept(body.review) : undefined,
     screen,
+    screenSize,
   ) as Anthropic.MessageParam[];
   const schema = tutorTurnSchema as unknown as Record<string, unknown>;
   const haiku = /haiku/i.test(MODEL);
