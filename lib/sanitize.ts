@@ -1,4 +1,4 @@
-import { checkAction } from "./mathcheck";
+import { checkAction, fixArithmetic } from "./mathcheck";
 import { toSlug } from "./review";
 import type { BoardAction, ConceptKey, Phase, Problem, TutorTurn, Verdict } from "./types";
 
@@ -46,7 +46,7 @@ export function normalizeTurn(raw: unknown): TutorTurn {
   };
 }
 
-const MARK_KINDS = ["circle", "arrow", "box", "label"];
+const MARK_KINDS = ["circle", "arrow", "box", "label", "note"];
 const COLORS = ["ink", "blue", "green", "red", "purple", "orange"];
 const grid = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.max(0, Math.min(4000, Math.round(v))) : 0);
 
@@ -60,7 +60,7 @@ export function normalizeScreenMark(raw: unknown): BoardAction {
     y: grid(m.y),
     x2: grid(m.x2),
     y2: grid(m.y2),
-    text: s(m.text, 60),
+    text: m.kind === "note" ? fixArithmetic(s(m.text, 140)) : s(m.text, 60),
     color: (COLORS.includes(m.color as string) ? m.color : "red") as BoardAction["color"],
   };
 }

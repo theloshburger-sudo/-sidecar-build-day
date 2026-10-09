@@ -51,7 +51,7 @@ export const boardActionSchema = {
       color,
     }),
     variant("pointTo", { target: str, match: str, text: str }),
-    variant("screenMark", { kind: { type: "string", enum: ["circle", "arrow", "box", "label"] }, x: num, y: num, x2: num, y2: num, text: str, color }),
+    variant("screenMark", { kind: { type: "string", enum: ["circle", "arrow", "box", "label", "note"] }, x: num, y: num, x2: num, y2: num, text: str, color }),
     variant("narrate", { text: str }),
     variant("clear", {}),
   ],
