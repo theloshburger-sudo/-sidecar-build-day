@@ -26,7 +26,24 @@ export async function startScreenShare(video: HTMLVideoElement): Promise<MediaSt
  * The current frame as a JPEG, at most 1456 px wide: about the most detail Claude keeps from an
  * image (larger ones are scaled down on arrival), so small text on a homework page stays readable.
  */
-export function captureFrame(video: HTMLVideoElement, maxW = 1456): { url: string; w: number; h: number } | null {
+export interface ScreenTile {
+  url: string;
+  /** The part of the full screenshot this zoom covers, in the full screenshot's pixels. */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface ScreenFrame {
+  url: string;
+  w: number;
+  h: number;
+  /** Zoomed-in quarters for reading small text (only when the real screen has more detail than the full shot). */
+  tiles: ScreenTile[];
+}
+
+export function captureFrame(video: HTMLVideoElement, maxW = 1456): ScreenFrame | null {
   const w = video.videoWidth;
   const h = video.videoHeight;
   if (!w || !h) return null;
@@ -35,7 +52,32 @@ export function captureFrame(video: HTMLVideoElement, maxW = 1456): { url: strin
   c.width = Math.round(w * scale);
   c.height = Math.round(h * scale);
   c.getContext("2d")?.drawImage(video, 0, 0, c.width, c.height);
-  return { url: c.toDataURL("image/jpeg", 0.85), w: c.width, h: c.height };
+  return { url: c.toDataURL("image/jpeg", 0.85), w: c.width, h: c.height, tiles: zoomTiles(video, scale) };
+}
+
+/**
+ * Four overlapping quarters of the real (full-resolution) screen, each sent at up to 1200 px wide:
+ * roughly 1.6-2x the detail of the full shot on a laptop/retina screen, so textbook-size text is readable.
+ */
+function zoomTiles(video: HTMLVideoElement, scale: number): ScreenTile[] {
+  const w = video.videoWidth;
+  const h = video.videoHeight;
+  if (w * scale > w * 0.75) return []; // the full shot already has nearly all the detail there is
+  const ov = 0.06; // overlap so words on a seam appear whole in one tile
+  const tiles: ScreenTile[] = [];
+  for (const [fx, fy] of [[0, 0], [0.5, 0], [0, 0.5], [0.5, 0.5]]) {
+    const sx = Math.max(0, (fx - (fx ? ov : 0)) * w);
+    const sy = Math.max(0, (fy - (fy ? ov : 0)) * h);
+    const sw = Math.min(w - sx, w * (0.5 + ov));
+    const sh = Math.min(h - sy, h * (0.5 + ov));
+    const ts = Math.min(1, 1200 / sw);
+    const c = document.createElement("canvas");
+    c.width = Math.round(sw * ts);
+    c.height = Math.round(sh * ts);
+    c.getContext("2d")?.drawImage(video, sx, sy, sw, sh, 0, 0, c.width, c.height);
+    tiles.push({ url: c.toDataURL("image/jpeg", 0.85), x: Math.round(sx * scale), y: Math.round(sy * scale), w: Math.round(sw * scale), h: Math.round(sh * scale) });
+  }
+  return tiles;
 }
 
 export function stopScreenShare(stream: MediaStream | null) {

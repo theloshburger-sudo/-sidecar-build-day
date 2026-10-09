@@ -1,11 +1,26 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { gridFromImage, inkUnder, snapBox, type Grid } from "@/lib/screen-snap";
 import type { BoardAction } from "@/lib/types";
 
 export type ScreenMark = BoardAction & { beat: number };
 
 const INK: Record<string, string> = { ink: "#1f2d3a", blue: "#1677e8", green: "#17936a", red: "#e0452b", purple: "#7a5af0", orange: "#e57b12" };
+const SNAP_CELL = 3; // screenshot px per content-grid cell
+
+/** Where the snapshot has text, lines or color, read from its pixels (for fitting boxes to content). */
+function readGrid(img: HTMLImageElement): Grid | null {
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const g = c.getContext("2d", { willReadFrequently: true });
+  if (!g) return null;
+  g.drawImage(img, 0, 0);
+  return gridFromImage(g.getImageData(0, 0, w, h).data, w, h, SNAP_CELL);
+}
 
 /**
  * The frame Teacher is looking at, with its marks drawn over it. Marks are in the screenshot's own
@@ -13,6 +28,39 @@ const INK: Record<string, string> = { ink: "#1f2d3a", blue: "#1677e8", green: "#
  */
 export default function ScreenPanel({ shot, marks, focusBeat, sharing, onStop }: { shot: string | null; marks: ScreenMark[]; focusBeat: number | null; sharing: boolean; onStop: () => void }) {
   const [size, setSize] = useState({ w: 1456, h: 819 });
+  // The content grid belongs to one snapshot: a stale one is ignored instead of reset (resetting in an
+  // effect raced the image's load event, which can fire first for an inline image).
+  const [built, setBuilt] = useState<{ shot: string; grid: Grid } | null>(null);
+  const grid = built && built.shot === shot ? built.grid : null;
+  const imgRef = useRef<HTMLImageElement>(null);
+  const buildGrid = (img: HTMLImageElement | null) => {
+    if (!img || !shot || !img.complete || !img.naturalWidth) return;
+    setSize({ w: img.naturalWidth, h: img.naturalHeight });
+    const g = readGrid(img);
+    if (g) setBuilt({ shot, grid: g });
+  };
+  // Already loaded before React saw it (cached / instant decode): build now.
+  useEffect(() => {
+    if (!grid) buildGrid(imgRef.current);
+  });
+  // Fit each box (and circle) to the real content Teacher aimed at.
+  const fitted = useMemo(
+    () =>
+      marks.map((m) => {
+        if (!grid) return m;
+        if (m.kind === "box") {
+          const b = snapBox(grid, { x1: m.x ?? 0, y1: m.y ?? 0, x2: m.x2 ?? 0, y2: m.y2 ?? 0 });
+          return { ...m, x: b.x1, y: b.y1, x2: b.x2, y2: b.y2 };
+        }
+        if (m.kind === "circle") {
+          const r = grid.cell * 6;
+          const b = snapBox(grid, { x1: (m.x ?? 0) - r, y1: (m.y ?? 0) - r / 2, x2: (m.x ?? 0) + r, y2: (m.y ?? 0) + r / 2 });
+          return { ...m, x: (b.x1 + b.x2) / 2, y: (b.y1 + b.y2) / 2, x2: b.x2 - b.x1, y2: b.y2 - b.y1 };
+        }
+        return m;
+      }),
+    [marks, grid],
+  );
   // Enlarged: the same snapshot (marks included) shown big over the page, for reading small text.
   const [big, setBig] = useState(false);
   const openBtn = useRef<HTMLButtonElement>(null);
@@ -44,14 +92,23 @@ export default function ScreenPanel({ shot, marks, focusBeat, sharing, onStop }:
   const font = W * 0.0165;
 
   /** A small pill label beside the mark, kept inside the image and off the spot itself. */
-  const label = (text: string | undefined, ax: number, ay: number, color: string, beside = false) => {
+  const label = (text: string | undefined, ax: number, ay: number, color: string, beside = false, box?: { x: number; y: number; w: number; h: number }) => {
     if (!text) return null;
     const tw = text.length * font * 0.56 + font;
     const th = font * 1.5;
     const gap = W * 0.006;
     // Beside (boxes): just right of the box, centered on it; flips to the left edge if there's no room.
-    const lx = beside ? (ax + gap + tw <= W ? ax + gap : Math.max(2, ax - tw - gap)) : Math.min(Math.max(ax + r * 1.1, 2), W - tw - 2);
-    const ly = beside ? Math.min(Math.max(ay - th / 2, 2), H - th - 2) : ay - r * 1.1 - th < 2 ? ay + r * 1.1 : ay - r * 1.1 - th;
+    let lx = beside ? (ax + gap + tw <= W ? ax + gap : Math.max(2, ax - tw - gap)) : Math.min(Math.max(ax + r * 1.1, 2), W - tw - 2);
+    let ly = beside ? Math.min(Math.max(ay - th / 2, 2), H - th - 2) : ay - r * 1.1 - th < 2 ? ay + r * 1.1 : ay - r * 1.1 - th;
+    // If that spot covers the page's text, use the side (right, left, above, below the mark) with the least text under it.
+    if (grid && box && inkUnder(grid, lx, ly, tw, th) > 0) {
+      const fit = (x: number, y: number) => ({ x: Math.min(Math.max(x, 2), W - tw - 2), y: Math.min(Math.max(y, 2), H - th - 2) });
+      const cy = box.y + box.h / 2;
+      const options = [fit(box.x + box.w + gap, cy - th / 2), fit(box.x - gap - tw, cy - th / 2), fit(box.x + box.w / 2 - tw / 2, box.y - gap - th), fit(box.x + box.w / 2 - tw / 2, box.y + box.h + gap)];
+      const best = options.reduce((a, b) => (inkUnder(grid, b.x, b.y, tw, th) < inkUnder(grid, a.x, a.y, tw, th) ? b : a));
+      lx = best.x;
+      ly = best.y;
+    }
     return (
       <g className="screen-label">
         <rect x={lx} y={ly} width={tw} height={th} rx={th / 2} fill="#fff" stroke={color} strokeWidth={W * 0.0012} />
@@ -87,14 +144,14 @@ export default function ScreenPanel({ shot, marks, focusBeat, sharing, onStop }:
         </span>
       </div>
       <div className="screen-frame">
-        <img src={shot} alt="Snapshot of your shared screen" onLoad={(e) => e.currentTarget.naturalWidth && setSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} />
+        <img ref={imgRef} src={shot} alt="Snapshot of your shared screen" onLoad={(e) => buildGrid(e.currentTarget)} />
         <svg viewBox={`0 0 ${W} ${H}`} aria-hidden>
           <defs>
             <marker id="screen-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
               <path d="M0,0 L10,5 L0,10 z" fill="context-stroke" />
             </marker>
           </defs>
-          {marks.map((m, i) => {
+          {fitted.map((m, i) => {
             const c = INK[m.color ?? "red"] ?? INK.red;
             const cls = `screen-mark ${m.beat === focusBeat ? "screen-mark--now" : ""}`;
             const x = clampX(m.x);
@@ -108,7 +165,7 @@ export default function ScreenPanel({ shot, marks, focusBeat, sharing, onStop }:
               return (
                 <g key={i} className={cls}>
                   <rect x={bx - pad} y={by - pad} width={Math.max(Math.abs(x2 - x), r) + pad * 2} height={Math.max(Math.abs(y2 - y), r * 0.8) + pad * 2} rx={W * 0.004} stroke={c} pathLength={1} />
-                  {label(m.text, Math.max(x, x2) + pad, (y + y2) / 2, c, true)}
+                  {label(m.text, Math.max(x, x2) + pad, (y + y2) / 2, c, true, { x: bx - pad, y: by - pad, w: Math.max(Math.abs(x2 - x), r) + pad * 2, h: Math.max(Math.abs(y2 - y), r * 0.8) + pad * 2 })}
                 </g>
               );
             }
@@ -122,7 +179,7 @@ export default function ScreenPanel({ shot, marks, focusBeat, sharing, onStop }:
             if (m.kind === "label") return <g key={i} className={cls}>{label(m.text, x - r * 1.1, y + r * 1.1, c)}</g>;
             return (
               <g key={i} className={cls}>
-                <ellipse cx={x} cy={y} rx={r * 1.6} ry={r} stroke={c} pathLength={1} />
+                <ellipse cx={x} cy={y} rx={grid && m.x2 ? Math.max(m.x2 / 2 + W * 0.008, r) : r * 1.6} ry={grid && m.y2 ? Math.max(m.y2 / 2 + W * 0.006, r * 0.7) : r} stroke={c} pathLength={1} />
                 {label(m.text, x + r * 0.6, y, c)}
               </g>
             );

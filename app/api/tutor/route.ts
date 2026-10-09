@@ -35,8 +35,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Slow down a little — too many requests. Try again in a minute." }, { status: 429 });
   }
 
-  // Two screenshots at most (board ink + shared screen): refuse anything bigger before parsing it.
-  if (Number(req.headers.get("content-length") ?? 0) > 7_000_000) {
+  // Board ink + shared screen + its four zoomed quarters at most: refuse anything bigger before parsing it.
+  if (Number(req.headers.get("content-length") ?? 0) > 9_000_000) {
     return NextResponse.json({ error: "That message is too large to send. Try again." }, { status: 413 });
   }
   let body: TutorRequest;
@@ -64,6 +64,11 @@ export async function POST(req: Request) {
   const sw = Math.round(Number(body.screenSize?.w));
   const sh = Math.round(Number(body.screenSize?.h));
   const screenSize = sw > 0 && sh > 0 && sw <= 4000 && sh <= 4000 ? { w: sw, h: sh } : undefined;
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v) : -1);
+  const screenTiles = (screen && Array.isArray(body.screenTiles) ? body.screenTiles : [])
+    .slice(0, 4)
+    .filter((t) => t && typeof t.url === "string" && t.url.length < 1_500_000 && [t.x, t.y, t.w, t.h].every((v) => num(v) >= 0))
+    .map((t) => ({ url: t.url, x: num(t.x), y: num(t.y), w: num(t.w), h: num(t.h) }));
 
   const effort = (["low", "medium", "high"].includes(process.env.ANTHROPIC_EFFORT ?? "") ? process.env.ANTHROPIC_EFFORT : "low") as Effort;
   const messages = toMessages(
@@ -81,6 +86,7 @@ export async function POST(req: Request) {
     normalizeConcept(body.review).slug ? normalizeConcept(body.review) : undefined,
     screen,
     screenSize,
+    screenTiles,
   ) as Anthropic.MessageParam[];
   const schema = tutorTurnSchema as unknown as Record<string, unknown>;
   const haiku = /haiku/i.test(MODEL);
