@@ -168,4 +168,6 @@ export interface TutorRequest {
   screen?: string;
   /** Pixel size of that screenshot: screenMark coordinates are in these pixels. */
   screenSize?: { w: number; h: number };
+  /** The student switched to "Work on my screen": teach on the screenshot, whiteboard hidden. */
+  screenTeach?: boolean;
 }

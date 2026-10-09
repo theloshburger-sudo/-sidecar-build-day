@@ -81,6 +81,7 @@ export async function POST(req: Request) {
     normalizeConcept(body.review).slug ? normalizeConcept(body.review) : undefined,
     screen,
     screenSize,
+    body.screenTeach === true,
   ) as Anthropic.MessageParam[];
   const schema = tutorTurnSchema as unknown as Record<string, unknown>;
   const haiku = /haiku/i.test(MODEL);

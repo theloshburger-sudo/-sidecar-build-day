@@ -142,6 +142,10 @@ export default function Session({
   const [screenShot, setScreenShot] = useState<string | null>(null);
   const [screenMarks, setScreenMarks] = useState<ScreenMark[]>([]);
   const [shareError, setShareError] = useState<string | null>(null);
+  /** "Work on my screen": the snapshot becomes the teaching surface and Teacher writes on it. */
+  const [screenTeach, setScreenTeach] = useState(false);
+  const screenTeachRef = useRef(false);
+  screenTeachRef.current = screenTeach && Boolean(screenShot);
   const streamRef = useRef<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const stopSharing = useCallback(() => {
@@ -571,6 +575,7 @@ export default function Session({
             image,
             screen: screenShot?.url,
             screenSize: screenShot ? { w: screenShot.w, h: screenShot.h } : undefined,
+            screenTeach: screenShot ? screenTeachRef.current : undefined,
             learner: learnerRef.current,
             concepts: conceptsRef.current.slice(0, 30),
             review: reviewRef.current ? { slug: reviewRef.current.slug, label: reviewRef.current.label } : undefined,
@@ -961,7 +966,7 @@ export default function Session({
           </div>
         </aside>
 
-        <section className={`stage ${screenShot ? "stage--screen" : ""}`}>
+        <section className={`stage ${screenShot ? "stage--screen" : ""} ${screenShot && screenTeach ? "stage--teach" : ""}`}>
           <video ref={videoRef} className="sr-only" playsInline muted aria-hidden />
           {isScreenSession && !screenShot && (
             <div className="card screen-gate">
@@ -985,7 +990,7 @@ export default function Session({
               {shareError && <p className="alert">{shareError}</p>}
             </div>
           )}
-          <ScreenPanel shot={screenShot} marks={screenMarks} focusBeat={focusBeat} sharing={sharing} onStop={stopSharing} />
+          <ScreenPanel shot={screenShot} marks={screenMarks} focusBeat={focusBeat} sharing={sharing} onStop={stopSharing} teaching={screenTeach} onTeachingChange={setScreenTeach} />
           <div className="board-frame">
             <div className="board-head">
               <Cloud size={focus ? 78 : 64} mood={mood} />
