@@ -74,3 +74,16 @@ test("screen zooms ride along after the full screenshot, with their position, an
   assert.match(text, /image 2 = x 0–772, y 0–434; image 3 = x 684–1456/);
   assert.match(text, /FULL screenshot's pixels/);
 });
+
+test("earlier views of the page come after the zooms, described, and marks stay on the current screen", async () => {
+  const { toMessages } = await import("../lib/prompt");
+  const p = { id: "screen", title: "My screen", text: "Help with what's on my screen", subject: "" };
+  const prefs = { format: "visual", voice: false, focus: false, pace: "normal", speed: 1, voiceSpeed: 1 } as const;
+  const jpg = "data:image/jpeg;base64,AAAA";
+  const content = toMessages(p, prefs, [], "", "plot the points", undefined, [], [], undefined, jpg, { w: 1456, h: 819 }, [], [jpg, jpg]).at(-1)!.content as { type: string; text?: string }[];
+  assert.equal(content.filter((c) => c.type === "image").length, 3);
+  const text = content.at(-1)!.text!;
+  assert.match(text, /Images 2–3 are earlier views/);
+  assert.match(text, /Don't ask them to scroll back/);
+  assert.match(text, /screenMarks only go on image 1/);
+});
