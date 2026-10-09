@@ -6,7 +6,8 @@ import TopBar, { StatusPill } from "./TopBar";
 import Whiteboard, { type WhiteboardHandle } from "./Whiteboard";
 import VideoCards from "./VideoCards";
 import ScreenPanel, { type ScreenMark } from "./ScreenPanel";
-import { captureFrame, screenShareSupported, startScreenShare, stopScreenShare, type ScreenFrame } from "@/lib/screen";
+import { captureFrame, captureView, screenShareSupported, startScreenShare, stopScreenShare, viewSignature, type ScreenFrame } from "@/lib/screen";
+import { PageMemory } from "@/lib/page-memory";
 import MathText from "./MathText";
 import type { AppStatus, Engine } from "./SidecarApp";
 import { applyActions, boardHeight, describeBoard, emptyBoard, BOARD_MIN_H, type BoardState, type Measure, type Prim } from "@/lib/board";
@@ -144,6 +145,20 @@ export default function Session({
   const [shareError, setShareError] = useState<string | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  // Page memory: one snapshot per different view while sharing, so Teacher sees parts scrolled past.
+  const pageMemory = useRef(new PageMemory<string>(4));
+  const [viewsSeen, setViewsSeen] = useState(0);
+  useEffect(() => {
+    if (!sharing) return;
+    const remember = () => {
+      const v = videoRef.current;
+      const sig = v ? viewSignature(v) : null;
+      if (v && sig && pageMemory.current.offer(sig, () => captureView(v))) setViewsSeen(pageMemory.current.size);
+    };
+    remember();
+    const t = setInterval(remember, 1000);
+    return () => clearInterval(t);
+  }, [sharing]);
   const stopSharing = useCallback(() => {
     stopScreenShare(streamRef.current);
     streamRef.current = null;
@@ -190,6 +205,13 @@ export default function Session({
     setShareError(null);
     setScreenShot(shot.url);
     setScreenMarks([]);
+    // Earlier views of the page (everything remembered except what's on screen now).
+    const sig = viewSignature(videoRef.current);
+    if (sig) {
+      pageMemory.current.offer(sig, () => captureView(videoRef.current!));
+      setViewsSeen(pageMemory.current.size);
+      return { ...shot, views: pageMemory.current.others(sig).map((v) => v.data) };
+    }
     return shot;
   };
   /** Save to memory. Writes are idempotent per session id, so one retry is safe; if it still fails, say so. */
@@ -572,6 +594,7 @@ export default function Session({
             screen: screenShot?.url,
             screenSize: screenShot ? { w: screenShot.w, h: screenShot.h } : undefined,
             screenTiles: screenShot?.tiles.length ? screenShot.tiles : undefined,
+            screenViews: screenShot?.views?.length ? screenShot.views : undefined,
             learner: learnerRef.current,
             concepts: conceptsRef.current.slice(0, 30),
             review: reviewRef.current ? { slug: reviewRef.current.slug, label: reviewRef.current.label } : undefined,
@@ -986,7 +1009,7 @@ export default function Session({
               {shareError && <p className="alert">{shareError}</p>}
             </div>
           )}
-          <ScreenPanel shot={screenShot} marks={screenMarks} focusBeat={focusBeat} sharing={sharing} onStop={stopSharing} />
+          <ScreenPanel shot={screenShot} marks={screenMarks} focusBeat={focusBeat} sharing={sharing} onStop={stopSharing} viewsSeen={viewsSeen} />
           <div className="board-frame">
             <div className="board-head">
               <Cloud size={focus ? 78 : 64} mood={mood} />

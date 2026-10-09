@@ -78,6 +78,7 @@ Example (asking): narrate "So what goes in this blank?" → pointTo {target "eq2
 Sometimes the student shares their screen (a Canvas page, Desmos, a PDF, an online quiz, a coding exercise). Then the last message includes a screenshot labeled "the student's shared screen". Teach from what's actually on it: read it carefully, and when the problem is on the screen, treat it as THE problem. Point at the screen with "screenMark" so they know exactly where to look, in the same beat as the sentence that names it:
 - screenMark {kind: "circle" | "box" | "arrow" | "label", x, y, x2, y2, text, color} — coordinates are PIXELS in the screenshot (its size is given with it; x from the left edge, y from the top). Prefer "box" tightly around the exact cell, number, field or line: (x,y) top-left and (x2,y2) bottom-right. circle: center x,y, for one small thing. arrow: from (x,y) in empty space to the target (x2,y2). label: a note at x,y. Unused coordinates are 0. text is 1–3 words or "" (the label is drawn beside the mark, never over it). Find the exact spot before marking: read the pixels around it. One or two marks per beat, never a mark on something you aren't talking about.
 - Use the whiteboard as usual for the explanation itself (worked steps, pictures). The screen marks are for "look here"; never redraw the whole screen on the board.
+- You may also get earlier views of the same page (the app remembers each view while they scroll). Use them: the whole problem is often spread across views. Only if something you need was never shown, ask them to scroll through it once; the app remembers it from then on.
 - If something isn't readable, say so and ask them to zoom in or scroll, rather than guessing.
 
 If the student drew on the whiteboard, you'll get an image of the board; the student's ink is green. Look at it carefully and respond to exactly what they drew (their work, a mistake, an arrow they drew).
@@ -170,6 +171,7 @@ export function toMessages(
   screen?: string,
   screenSize?: { w: number; h: number },
   screenTiles: { url: string; x: number; y: number; w: number; h: number }[] = [],
+  screenViews: string[] = [],
 ): { role: "user" | "assistant"; content: MessageContent }[] {
   const base = textMessages(problem, prefs, history, boardSummary, studentMessage, learner, concepts, review);
   const parse = (url?: string) => (url ? /^data:(image\/(?:jpeg|png));base64,([A-Za-z0-9+/=]+)$/.exec(url) : null);
@@ -180,7 +182,8 @@ export function toMessages(
   const img = (m: RegExpExecArray) => ({ type: "image" as const, source: { type: "base64" as const, media_type: m[1] as ImageMedia, data: m[2] } });
   // Order: full screen, its zoomed quarters, then the whiteboard. Each image is described by position.
   const zooms = scr ? screenTiles.map((t) => ({ t, m: parse(t.url) })).filter((z): z is { t: (typeof screenTiles)[number]; m: RegExpExecArray } => !!z.m) : [];
-  const images = [...(scr ? [img(scr)] : []), ...zooms.map((z) => img(z.m)), ...(ink ? [img(ink)] : [])];
+  const earlier = scr ? screenViews.map(parse).filter((m): m is RegExpExecArray => !!m) : [];
+  const images = [...(scr ? [img(scr)] : []), ...zooms.map((z) => img(z.m)), ...earlier.map(img), ...(ink ? [img(ink)] : [])];
   const ord = (i: number) => (images.length === 1 ? "Image above" : `Image ${i}`);
   const notes: string[] = [];
   let n = 1;
@@ -190,6 +193,11 @@ export function toMessages(
     if (zooms.length) {
       const list = zooms.map((z) => `image ${n++} = x ${z.t.x}–${z.t.x + z.t.w}, y ${z.t.y}–${z.t.y + z.t.h}`).join("; ");
       notes.push(`[Zoomed-in parts of that same screen, sharper, for reading small text and numbers exactly: ${list} (in the full screenshot's pixels). Read details from the zooms, but always give screenMark coordinates in the FULL screenshot's pixels.]`);
+    }
+    if (earlier.length) {
+      const first = n;
+      n += earlier.length;
+      notes.push(`[${earlier.length === 1 ? `Image ${first} is an earlier view` : `Images ${first}–${n - 1} are earlier views`} of the student's screen from this session, oldest first: what they showed before scrolling or switching pages. Use them for anything not visible now (e.g. a table above the current question). Don't ask them to scroll back for something you can read there. screenMarks only go on image 1 (what's on screen now).]`);
     }
   }
   if (ink) notes.push(`[${ord(n++)}: the whiteboard right now. The student's own drawing is in GREEN ink.]`);

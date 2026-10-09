@@ -168,6 +168,8 @@ export interface TutorRequest {
   screen?: string;
   /** Pixel size of that screenshot: screenMark coordinates are in these pixels. */
   screenSize?: { w: number; h: number };
+  /** Earlier views of the same page while the student scrolled (page memory), oldest first. */
+  screenViews?: string[];
   /** Zoomed-in quarters of the same screen, for reading small text. */
   screenTiles?: { url: string; x: number; y: number; w: number; h: number }[];
 }

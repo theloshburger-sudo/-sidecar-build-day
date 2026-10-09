@@ -41,6 +41,8 @@ export interface ScreenFrame {
   h: number;
   /** Zoomed-in quarters for reading small text (only when the real screen has more detail than the full shot). */
   tiles: ScreenTile[];
+  /** Earlier views of the same page (page memory), as JPEG data URLs, oldest first. */
+  views?: string[];
 }
 
 export function captureFrame(video: HTMLVideoElement, maxW = 1456): ScreenFrame | null {
@@ -82,4 +84,32 @@ function zoomTiles(video: HTMLVideoElement, scale: number): ScreenTile[] {
 
 export function stopScreenShare(stream: MediaStream | null) {
   stream?.getTracks().forEach((t) => t.stop());
+}
+
+/** A tiny grayscale thumbnail of what's on screen, for telling one view from another (scrolling). */
+export function viewSignature(video: HTMLVideoElement): Uint8Array | null {
+  if (!video.videoWidth) return null;
+  const c = document.createElement("canvas");
+  c.width = 64;
+  c.height = 36;
+  const g = c.getContext("2d", { willReadFrequently: true });
+  if (!g) return null;
+  g.drawImage(video, 0, 0, 64, 36);
+  const d = g.getImageData(0, 0, 64, 36).data;
+  const out = new Uint8Array(64 * 36);
+  for (let i = 0; i < out.length; i++) out[i] = Math.round(0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]);
+  return out;
+}
+
+/** A readable copy of one view for page memory (a bit smaller than the main shot to keep requests light). */
+export function captureView(video: HTMLVideoElement, maxW = 1200): string | null {
+  const w = video.videoWidth;
+  const h = video.videoHeight;
+  if (!w || !h) return null;
+  const scale = Math.min(1, maxW / w);
+  const c = document.createElement("canvas");
+  c.width = Math.round(w * scale);
+  c.height = Math.round(h * scale);
+  c.getContext("2d")?.drawImage(video, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", 0.8);
 }

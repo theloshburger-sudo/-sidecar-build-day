@@ -26,7 +26,7 @@ function readGrid(img: HTMLImageElement): Grid | null {
  * The frame Teacher is looking at, with its marks drawn over it. Marks are in the screenshot's own
  * pixels (the size Teacher was told), so the overlay uses the image's natural size as its viewBox.
  */
-export default function ScreenPanel({ shot, marks, focusBeat, sharing, onStop }: { shot: string | null; marks: ScreenMark[]; focusBeat: number | null; sharing: boolean; onStop: () => void }) {
+export default function ScreenPanel({ shot, marks, focusBeat, sharing, onStop, viewsSeen = 0 }: { shot: string | null; marks: ScreenMark[]; focusBeat: number | null; sharing: boolean; onStop: () => void; viewsSeen?: number }) {
   const [size, setSize] = useState({ w: 1456, h: 819 });
   // The content grid belongs to one snapshot: a stale one is ignored instead of reset (resetting in an
   // effect raced the image's load event, which can fire first for an inline image).
@@ -125,7 +125,13 @@ export default function ScreenPanel({ shot, marks, focusBeat, sharing, onStop }:
     <div className={`screen-panel ${big ? "screen-panel--big" : ""}`} role={big ? "dialog" : undefined} aria-modal={big || undefined} aria-label={big ? "Your screen, enlarged" : undefined}>
       <div className="screen-head">
         <strong>🖥 Your screen</strong>
-        <span className="muted small screen-note">{sharing ? "A fresh snapshot goes to Teacher with each message." : "Sharing stopped. This is the last snapshot."}</span>
+        <span className="muted small screen-note">
+          {sharing
+            ? viewsSeen > 1
+              ? `Teacher remembers ${viewsSeen} views of this page, so you don't need to scroll back.`
+              : "Scroll through the whole problem once, and Teacher will remember all of it."
+            : "Sharing stopped. This is the last snapshot."}
+        </span>
         <span className="screen-actions">
           {big ? (
             <button ref={closeBtn} className="link-back small" onClick={() => setBig(false)}>
