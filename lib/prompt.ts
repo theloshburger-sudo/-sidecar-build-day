@@ -76,7 +76,7 @@ Example (pointing back): narrate "Look at the 22 on the right side: we still hav
 Example (asking): narrate "So what goes in this blank?" → pointTo {target "eq2", match "__", text "your turn"}
 # The student's shared screen
 Sometimes the student shares their screen (a Canvas page, Desmos, a PDF, an online quiz, a coding exercise). Then the last message includes a screenshot labeled "the student's shared screen". Teach from what's actually on it: read it carefully, and when the problem is on the screen, treat it as THE problem. Point at the screen with "screenMark" so they know exactly where to look, in the same beat as the sentence that names it:
-- screenMark {kind: "circle" | "box" | "arrow" | "label" | "note", x, y, x2, y2, text, color} — coordinates are PIXELS in the screenshot (its size is given with it; x from the left edge, y from the top). Prefer "box" tightly around the exact cell, number, field or line: (x,y) top-left and (x2,y2) bottom-right. circle: center x,y, for one small thing. arrow: from (x,y) in empty space to the target (x2,y2). label: a 1–3 word tag at x,y. note: your handwriting on their screen, 1–3 short lines (a step, a number with its work, "MPL = 120 − 70 = 50"), at the x,y it explains; with x2,y2 it explains that whole area. Unused coordinates are 0. For box/circle, text is 1–3 words or "". Labels and notes are automatically placed in blank space beside the spot, never over the page's text, so don't try to aim them at empty space yourself: aim at the thing you mean. Find the exact spot before marking: read the pixels around it. One or two marks per beat, never a mark on something you aren't talking about.
+- screenMark {kind: "circle" | "box" | "arrow" | "label", x, y, x2, y2, text, color} — coordinates are PIXELS in the screenshot (its size is given with it; x from the left edge, y from the top). Prefer "box" tightly around the exact cell, number, field or line: (x,y) top-left and (x2,y2) bottom-right. circle: center x,y, for one small thing. arrow: from (x,y) in empty space to the target (x2,y2). label: a note at x,y. Unused coordinates are 0. text is 1–3 words or "" (the label is drawn beside the mark, never over it). Find the exact spot before marking: read the pixels around it. One or two marks per beat, never a mark on something you aren't talking about.
 - Use the whiteboard as usual for the explanation itself (worked steps, pictures). The screen marks are for "look here"; never redraw the whole screen on the board.
 - If something isn't readable, say so and ask them to zoom in or scroll, rather than guessing.
 
@@ -169,7 +169,6 @@ export function toMessages(
   review?: ConceptKey,
   screen?: string,
   screenSize?: { w: number; h: number },
-  screenTeach = false,
 ): { role: "user" | "assistant"; content: MessageContent }[] {
   const base = textMessages(problem, prefs, history, boardSummary, studentMessage, learner, concepts, review);
   const parse = (url?: string) => (url ? /^data:(image\/(?:jpeg|png));base64,([A-Za-z0-9+/=]+)$/.exec(url) : null);
@@ -178,9 +177,7 @@ export function toMessages(
   if (!scr && !ink) return base;
   const last = base[base.length - 1];
   const img = (m: RegExpExecArray) => ({ type: "image" as const, source: { type: "base64" as const, media_type: m[1] as ImageMedia, data: m[2] } });
-  const size =
-    (screenSize ? ` It is ${screenSize.w}×${screenSize.h} pixels: give screenMark x/y in these pixels.` : "") +
-    (screenTeach ? " The student chose WORK ON MY SCREEN: the whiteboard is hidden, so teach right on this screenshot. Box or circle what you mean, and write each step, number and short explanation as screenMark notes placed next to the spot it explains. No whiteboard actions this turn (narrate still)." : "");
+  const size = screenSize ? ` It is ${screenSize.w}×${screenSize.h} pixels: give screenMark x/y in these pixels.` : "";
   const notes = [
     scr && (ink ? `[First image: the student's shared screen right now.${size}]` : `[Image above: the student's shared screen right now.${size}]`),
     ink && (scr ? "[Second image: the whiteboard right now. The student's own drawing is in GREEN ink.]" : "[Image above: the whiteboard right now. The student's own drawing is in GREEN ink.]"),
