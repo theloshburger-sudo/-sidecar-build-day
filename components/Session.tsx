@@ -6,7 +6,7 @@ import TopBar, { StatusPill } from "./TopBar";
 import Whiteboard, { type WhiteboardHandle } from "./Whiteboard";
 import VideoCards from "./VideoCards";
 import ScreenPanel, { type ScreenMark } from "./ScreenPanel";
-import { captureFrame, screenShareSupported, startScreenShare, stopScreenShare } from "@/lib/screen";
+import { captureFrame, screenShareSupported, startScreenShare, stopScreenShare, type ScreenFrame } from "@/lib/screen";
 import MathText from "./MathText";
 import type { AppStatus, Engine } from "./SidecarApp";
 import { applyActions, boardHeight, describeBoard, emptyBoard, BOARD_MIN_H, type BoardState, type Measure, type Prim } from "@/lib/board";
@@ -180,7 +180,7 @@ export default function Session({
     }
   }, [stopSharing]);
   /** A fresh frame for the next message; Teacher's old marks are cleared because the screen moved on. */
-  const grabFrame = (): { url: string; w: number; h: number } | undefined => {
+  const grabFrame = (): ScreenFrame | undefined => {
     if (!streamRef.current || !videoRef.current) return undefined;
     const shot = captureFrame(videoRef.current);
     if (!shot) {
@@ -551,7 +551,7 @@ export default function Session({
   );
 
   const askTutor = useCallback(
-    async (text: string | null, useEngine: Engine, image?: string, screenShot?: { url: string; w: number; h: number }) => {
+    async (text: string | null, useEngine: Engine, image?: string, screenShot?: ScreenFrame) => {
       setError(null);
       if (useEngine === "demo") return runDemo(text);
       setThinking(true);
@@ -571,6 +571,7 @@ export default function Session({
             image,
             screen: screenShot?.url,
             screenSize: screenShot ? { w: screenShot.w, h: screenShot.h } : undefined,
+            screenTiles: screenShot?.tiles.length ? screenShot.tiles : undefined,
             learner: learnerRef.current,
             concepts: conceptsRef.current.slice(0, 30),
             review: reviewRef.current ? { slug: reviewRef.current.slug, label: reviewRef.current.label } : undefined,

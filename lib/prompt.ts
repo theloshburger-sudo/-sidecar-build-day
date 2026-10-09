@@ -169,6 +169,7 @@ export function toMessages(
   review?: ConceptKey,
   screen?: string,
   screenSize?: { w: number; h: number },
+  screenTiles: { url: string; x: number; y: number; w: number; h: number }[] = [],
 ): { role: "user" | "assistant"; content: MessageContent }[] {
   const base = textMessages(problem, prefs, history, boardSummary, studentMessage, learner, concepts, review);
   const parse = (url?: string) => (url ? /^data:(image\/(?:jpeg|png));base64,([A-Za-z0-9+/=]+)$/.exec(url) : null);
@@ -177,16 +178,26 @@ export function toMessages(
   if (!scr && !ink) return base;
   const last = base[base.length - 1];
   const img = (m: RegExpExecArray) => ({ type: "image" as const, source: { type: "base64" as const, media_type: m[1] as ImageMedia, data: m[2] } });
-  const size = screenSize ? ` It is ${screenSize.w}×${screenSize.h} pixels: give screenMark x/y in these pixels.` : "";
-  const notes = [
-    scr && (ink ? `[First image: the student's shared screen right now.${size}]` : `[Image above: the student's shared screen right now.${size}]`),
-    ink && (scr ? "[Second image: the whiteboard right now. The student's own drawing is in GREEN ink.]" : "[Image above: the whiteboard right now. The student's own drawing is in GREEN ink.]"),
-  ].filter(Boolean);
+  // Order: full screen, its zoomed quarters, then the whiteboard. Each image is described by position.
+  const zooms = scr ? screenTiles.map((t) => ({ t, m: parse(t.url) })).filter((z): z is { t: (typeof screenTiles)[number]; m: RegExpExecArray } => !!z.m) : [];
+  const images = [...(scr ? [img(scr)] : []), ...zooms.map((z) => img(z.m)), ...(ink ? [img(ink)] : [])];
+  const ord = (i: number) => (images.length === 1 ? "Image above" : `Image ${i}`);
+  const notes: string[] = [];
+  let n = 1;
+  if (scr) {
+    const size = screenSize ? ` It is ${screenSize.w}×${screenSize.h} pixels: give screenMark x/y in these pixels.` : "";
+    notes.push(`[${ord(n++)}: the student's shared screen right now.${size}]`);
+    if (zooms.length) {
+      const list = zooms.map((z) => `image ${n++} = x ${z.t.x}–${z.t.x + z.t.w}, y ${z.t.y}–${z.t.y + z.t.h}`).join("; ");
+      notes.push(`[Zoomed-in parts of that same screen, sharper, for reading small text and numbers exactly: ${list} (in the full screenshot's pixels). Read details from the zooms, but always give screenMark coordinates in the FULL screenshot's pixels.]`);
+    }
+  }
+  if (ink) notes.push(`[${ord(n++)}: the whiteboard right now. The student's own drawing is in GREEN ink.]`);
   return [
     ...base.slice(0, -1),
     {
       role: "user",
-      content: [...(scr ? [img(scr)] : []), ...(ink ? [img(ink)] : []), { type: "text", text: `${last.content}\n\n${notes.join("\n")}` }],
+      content: [...images, { type: "text", text: `${last.content}\n\n${notes.join("\n")}` }],
     },
   ];
 }

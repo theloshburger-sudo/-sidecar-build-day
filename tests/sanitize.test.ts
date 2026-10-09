@@ -60,3 +60,17 @@ test("screenMark pixel coordinates are rounded and kept in range", async () => {
   assert.deepEqual(normalizeScreenMark({ type: "screenMark", kind: "box", x: 412.6, y: -20, x2: 9000, y2: 300, text: "this", color: "red" }), { type: "screenMark", kind: "box", x: 413, y: 0, x2: 4000, y2: 300, text: "this", color: "red" });
   assert.equal(normalizeScreenMark({ type: "screenMark", kind: "laser", x: 1, y: 1 }).kind, "circle");
 });
+
+test("screen zooms ride along after the full screenshot, with their position, and marks stay in full-screenshot pixels", async () => {
+  const { toMessages } = await import("../lib/prompt");
+  const p = { id: "screen", title: "My screen", text: "Help with what's on my screen", subject: "" };
+  const prefs = { format: "visual", voice: false, focus: false, pace: "normal", speed: 1, voiceSpeed: 1 } as const;
+  const jpg = "data:image/jpeg;base64,AAAA";
+  const tiles = [{ url: jpg, x: 0, y: 0, w: 772, h: 434 }, { url: jpg, x: 684, y: 0, w: 772, h: 434 }];
+  const content = toMessages(p, prefs, [], "", "what goes in the blank?", undefined, [], [], undefined, jpg, { w: 1456, h: 819 }, tiles).at(-1)!.content as { type: string; text?: string }[];
+  assert.equal(content.filter((c) => c.type === "image").length, 3);
+  const text = content.at(-1)!.text!;
+  assert.match(text, /Image 1: the student's shared screen/);
+  assert.match(text, /image 2 = x 0–772, y 0–434; image 3 = x 684–1456/);
+  assert.match(text, /FULL screenshot's pixels/);
+});

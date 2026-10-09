@@ -168,4 +168,6 @@ export interface TutorRequest {
   screen?: string;
   /** Pixel size of that screenshot: screenMark coordinates are in these pixels. */
   screenSize?: { w: number; h: number };
+  /** Zoomed-in quarters of the same screen, for reading small text. */
+  screenTiles?: { url: string; x: number; y: number; w: number; h: number }[];
 }
